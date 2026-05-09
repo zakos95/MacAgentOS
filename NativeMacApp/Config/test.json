@@ -1,0 +1,8 @@
+{
+  "environment": "test",
+  "backendBaseURL": "http://127.0.0.1:8000",
+  "healthRetries": 4,
+  "healthRetryDelayMs": 500,
+  "defaultTurbo": false,
+  "openAfterBuild": false
+}

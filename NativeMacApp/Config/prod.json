@@ -1,0 +1,8 @@
+{
+  "environment": "prod",
+  "backendBaseURL": "http://127.0.0.1:8000",
+  "healthRetries": 8,
+  "healthRetryDelayMs": 750,
+  "defaultTurbo": false,
+  "openAfterBuild": false
+}

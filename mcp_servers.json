@@ -1,0 +1,422 @@
+{
+  "mcp_servers": {
+    "filesystem": {
+      "name": "Filesystem",
+      "description": "Accède aux fichiers locaux avec permissions configurables",
+      "package": "@modelcontextprotocol/server-filesystem",
+      "args": [
+        "--root",
+        "${PROJECT_ROOT}"
+      ],
+      "type": "official",
+      "category": "files",
+      "requires_auth": false
+    },
+    "git": {
+      "name": "Git",
+      "description": "Outils pour lire, rechercher et manipuler les dépôt Git",
+      "package": "@modelcontextprotocol/server-git",
+      "args": [
+        "--repository",
+        "${PROJECT_ROOT}"
+      ],
+      "type": "official",
+      "category": "development",
+      "requires_auth": false
+    },
+    "github": {
+      "name": "GitHub",
+      "description": "Gestion de dépôt, issues, pull requests et opérations GitHub API",
+      "package": "@anthropic-ai/mcp-server-github",
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": ""
+      },
+      "type": "official",
+      "category": "development",
+      "requires_auth": true,
+      "auth_hint": "Créer un token sur github.com/settings/tokens"
+    },
+    "postgres": {
+      "name": "PostgreSQL",
+      "description": "Accès base de données PostgreSQL en lecture seule",
+      "package": "@anthropic-ai/mcp-server-postgres",
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "postgresql://localhost:5432/db"
+      },
+      "type": "official",
+      "category": "databases",
+      "requires_auth": true,
+      "auth_hint": "Connection string PostgreSQL"
+    },
+    "sqlite": {
+      "name": "SQLite",
+      "description": "Opérations base de données SQLite",
+      "package": "@modelcontextprotocol/server-sqlite",
+      "env": {
+        "SQLITE_DB_PATH": "./data.db"
+      },
+      "type": "official",
+      "category": "databases",
+      "requires_auth": false
+    },
+    "brave-search": {
+      "name": "Brave Search",
+      "description": "Recherche web via l'API Brave",
+      "package": "@modelcontextprotocol/server-brave-search",
+      "env": {
+        "BRAVE_API_KEY": ""
+      },
+      "type": "official",
+      "category": "search",
+      "requires_auth": true,
+      "auth_hint": "API key sur brave.com/search/api"
+    },
+    "fetch": {
+      "name": "Fetch",
+      "description": "Récupération et conversion de contenu web",
+      "package": "@modelcontextprotocol/server-fetch",
+      "type": "official",
+      "category": "search",
+      "requires_auth": false
+    },
+    "puppeteer": {
+      "name": "Puppeteer",
+      "description": "Automation browser et web scraping",
+      "package": "@modelcontextprotocol/server-puppeteer",
+      "type": "official",
+      "category": "browser",
+      "requires_auth": false
+    },
+    "playwright": {
+      "name": "Playwright",
+      "description": "Automation browser et tests",
+      "package": "@playwright/mcp-server",
+      "type": "official",
+      "category": "browser",
+      "requires_auth": false
+    },
+    "slack": {
+      "name": "Slack",
+      "description": "Gestion channels et messagerie Slack",
+      "package": "@anthropic-ai/mcp-server-slack",
+      "env": {
+        "SLACK_BOT_TOKEN": "",
+        "SLACK_TEAM_ID": ""
+      },
+      "type": "official",
+      "category": "communication",
+      "requires_auth": true,
+      "auth_hint": "Bot token sur api.slack.com"
+    },
+    "notion": {
+      "name": "Notion",
+      "description": "Accès Notion pour notes et项目管理",
+      "package": "@modelcontextprotocol/server-notion",
+      "env": {
+        "NOTION_API_KEY": ""
+      },
+      "type": "official",
+      "category": "productivity",
+      "requires_auth": true,
+      "auth_hint": "API key sur notion.so/my-integrations"
+    },
+    "google-drive": {
+      "name": "Google Drive",
+      "description": "Accès et recherche fichiers Google Drive",
+      "package": "@modelcontextprotocol/server-gdrive",
+      "type": "official",
+      "category": "storage",
+      "requires_auth": true,
+      "auth_hint": "OAuth via Google Cloud Console"
+    },
+    "gmail": {
+      "name": "Gmail",
+      "description": "Lecture et envoi d'emails via Gmail",
+      "package": "@modelcontextprotocol/server-gmail",
+      "type": "official",
+      "category": "communication",
+      "requires_auth": true,
+      "auth_hint": "OAuth via Google Cloud Console"
+    },
+    "google-calendar": {
+      "name": "Google Calendar",
+      "description": "Gestion calendrier Google",
+      "package": "@modelcontextprotocol/server-google-calendar",
+      "type": "official",
+      "category": "productivity",
+      "requires_auth": true,
+      "auth_hint": "OAuth via Google Cloud Console"
+    },
+    "sentry": {
+      "name": "Sentry",
+      "description": "Récupération et analyse des erreurs Sentry",
+      "package": "@modelcontextprotocol/server-sentry",
+      "env": {
+        "SENTRY_AUTH_TOKEN": "",
+        "SENTRY_ORG": ""
+      },
+      "type": "official",
+      "category": "monitoring",
+      "requires_auth": true,
+      "auth_hint": "Token sur sentry.io/settings"
+    },
+    "docker": {
+      "name": "Docker",
+      "description": "Gestion conteneurs, images, volumes Docker",
+      "package": "@ckreiling/mcp-server-docker",
+      "type": "community",
+      "category": "devops",
+      "requires_auth": false
+    },
+    "memory": {
+      "name": "Memory",
+      "description": "Mémoire persistante basée sur graphe de connaissances",
+      "package": "@modelcontextprotocol/server-memory",
+      "type": "official",
+      "category": "productivity",
+      "requires_auth": false
+    },
+    "sequential-thinking": {
+      "name": "Sequential Thinking",
+      "description": "Résolution de problèmes par réflexion en chaîne",
+      "package": "@modelcontextprotocol/server-sequential-thinking",
+      "type": "official",
+      "category": "productivity",
+      "requires_auth": false
+    },
+    "time": {
+      "name": "Time",
+      "description": "Conversion fuseaux horaires",
+      "package": "@modelcontextprotocol/server-time",
+      "type": "official",
+      "category": "utilities",
+      "requires_auth": false
+    },
+    "linear": {
+      "name": "Linear",
+      "description": "Gestion issues et sprints Linear",
+      "package": "@modelcontextprotocol/server-linear",
+      "env": {
+        "LINEAR_API_KEY": ""
+      },
+      "type": "community",
+      "category": "project_management",
+      "requires_auth": true,
+      "auth_hint": "API key sur linear.app/settings"
+    },
+    "mongodb": {
+      "name": "MongoDB",
+      "description": "Base de données MongoDB",
+      "package": "@kiliczsh/mcp-mongo-server",
+      "env": {
+        "MONGODB_CONNECTION_STRING": ""
+      },
+      "type": "community",
+      "category": "databases",
+      "requires_auth": true
+    },
+    "redis": {
+      "name": "Redis",
+      "description": "Base de données clé-valeur Redis",
+      "package": "@redis/mcp-redis",
+      "env": {
+        "REDIS_URL": "redis://localhost:6379"
+      },
+      "type": "community",
+      "category": "databases",
+      "requires_auth": false
+    },
+    "neon": {
+      "name": "Neon",
+      "description": "Plateforme serverless PostgreSQL",
+      "package": "@neondatabase-labs/mcp-server-neon",
+      "env": {
+        "NEON_API_KEY": ""
+      },
+      "type": "community",
+      "category": "databases",
+      "requires_auth": true
+    }
+  },
+  "categories": {
+    "files": {
+      "name": "Fichiers",
+      "icon": "📂"
+    },
+    "development": {
+      "name": "Développement",
+      "icon": "💻"
+    },
+    "databases": {
+      "name": "Bases de données",
+      "icon": "🗄️"
+    },
+    "communication": {
+      "name": "Communication",
+      "icon": "💬"
+    },
+    "search": {
+      "name": "Recherche",
+      "icon": "🔍"
+    },
+    "browser": {
+      "name": "Browser",
+      "icon": "🌐"
+    },
+    "cloud": {
+      "name": "Cloud",
+      "icon": "☁️"
+    },
+    "monitoring": {
+      "name": "Monitoring",
+      "icon": "📊"
+    },
+    "project_management": {
+      "name": "Gestion de projet",
+      "icon": "📋"
+    },
+    "productivity": {
+      "name": "Productivité",
+      "icon": "📝"
+    },
+    "storage": {
+      "name": "Stockage",
+      "icon": "💾"
+    },
+    "devops": {
+      "name": "DevOps",
+      "icon": "🐳"
+    },
+    "utilities": {
+      "name": "Utilitaires",
+      "icon": "🔧"
+    }
+  },
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "${PROJECT_ROOT}"
+      ]
+    },
+    "mac-control": {
+      "command": "${VENV_PYTHON}",
+      "args": [
+        "${PROJECT_ROOT}/mac_server.py"
+      ]
+    },
+    "safari": {
+      "command": "${VENV_PYTHON}",
+      "args": [
+        "${PROJECT_ROOT}/mcp_safari.py"
+      ]
+    },
+    "chatgpt": {
+      "command": "${VENV_PYTHON}",
+      "args": [
+        "${MCP_DYNAMIC}/mcp_ChatGPT.py"
+      ]
+    },
+    "google_chrome": {
+      "command": "${VENV_PYTHON}",
+      "args": [
+        "${MCP_DYNAMIC}/mcp_Google_Chrome.py"
+      ]
+    },
+    "vlc": {
+      "command": "${VENV_PYTHON}",
+      "args": [
+        "${MCP_DYNAMIC}/mcp_VLC.py"
+      ]
+    },
+    "claude": {
+      "command": "${VENV_PYTHON}",
+      "args": [
+        "${MCP_DYNAMIC}/mcp_Claude.py"
+      ]
+    }
+  },
+  "available_servers": [
+    "filesystem",
+    "mac-control",
+    "safari"
+  ],
+  "configurable_servers": [
+    {
+      "id": "github",
+      "name": "GitHub",
+      "env_vars": [
+        "GITHUB_PERSONAL_ACCESS_TOKEN"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "env_vars": [
+        "SLACK_BOT_TOKEN",
+        "SLACK_TEAM_ID"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "env_vars": [
+        "POSTGRES_CONNECTION_STRING"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "brave-search",
+      "name": "Brave Search",
+      "env_vars": [
+        "BRAVE_API_KEY"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "env_vars": [
+        "NOTION_API_KEY"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "sentry",
+      "name": "Sentry",
+      "env_vars": [
+        "SENTRY_AUTH_TOKEN",
+        "SENTRY_ORG"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "linear",
+      "name": "Linear",
+      "env_vars": [
+        "LINEAR_API_KEY"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "gmail",
+      "name": "Gmail",
+      "env_vars": [
+        "GMAIL_CREDENTIALS"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "google-drive",
+      "name": "Google Drive",
+      "env_vars": [
+        "GOOGLE_CREDENTIALS"
+      ],
+      "enabled": false
+    }
+  ]
+}

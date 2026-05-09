@@ -1,0 +1,39 @@
+# Secrets / local runtime
+.env
+.env.*
+data/
+logs/
+*.log
+.macagent/
+provider-connections.json
+conversations.json
+api_key.txt
+settings.json
+
+# Python
+.venv/
+.venv312/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Builds / binaries
+build/
+dist/
+release/
+NativeMacApp/.build/
+NativeMacApp/dist/
+*.app
+*.dSYM
+
+# macOS / Xcode
+.DS_Store
+*.xcuserstate
+DerivedData/
+
+# Generated local MCP state
+mcp_dynamic/registry*.json

@@ -1,0 +1,2259 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Power Ai</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      --bg: #eef3fb;
+      --bg-secondary: #e4ebf5;
+      --surface: rgba(255, 255, 255, 0.72);
+      --surface-strong: rgba(255, 255, 255, 0.9);
+      --surface-hover: rgba(255, 255, 255, 0.96);
+      --border: rgba(15, 23, 42, 0.08);
+      --border-strong: rgba(15, 23, 42, 0.14);
+      --accent: #0a84ff;
+      --accent-dark: #0066cc;
+      --accent-soft: rgba(10, 132, 255, 0.12);
+      --text: #101828;
+      --text-secondary: #667085;
+      --input-bg: rgba(255, 255, 255, 0.88);
+      --shadow-soft: 0 12px 40px rgba(15, 23, 42, 0.08);
+      --shadow-strong: 0 24px 60px rgba(15, 23, 42, 0.14);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+    }
+    
+    html, body { 
+      height: 100%; 
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      color-scheme: light;
+    }
+
+    body {
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(10, 132, 255, 0.16), transparent 28%),
+        radial-gradient(circle at top right, rgba(52, 199, 89, 0.12), transparent 24%),
+        linear-gradient(180deg, #f8fbff 0%, #eaf1f9 100%);
+    }
+
+    .window-dragbar {
+      height: 28px;
+      width: 100%;
+      -webkit-app-region: drag;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(102, 112, 133, 0.72);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      user-select: none;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+      -webkit-app-region: no-drag;
+    }
+    
+    /* Layout */
+    .app {
+      display: flex;
+      height: calc(100% - 28px);
+      margin: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.52);
+      border-radius: 30px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.32);
+      box-shadow: var(--shadow-strong);
+      backdrop-filter: blur(30px) saturate(170%);
+      -webkit-backdrop-filter: blur(30px) saturate(170%);
+    }
+    
+    /* Sidebar */
+    .sidebar {
+      width: 292px;
+      background: linear-gradient(180deg, rgba(247, 250, 255, 0.88), rgba(240, 245, 252, 0.68));
+      border-right: 1px solid rgba(255, 255, 255, 0.5);
+      display: flex;
+      flex-direction: column;
+      padding: 18px 14px 14px;
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+    }
+    
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px 14px;
+      margin-bottom: 10px;
+    }
+    
+    .logo {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #5ac8fa, #0a84ff 58%, #5856d6);
+      border-radius: 9px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 10px 18px rgba(10, 132, 255, 0.25);
+    }
+    
+    .logo-text {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    
+    .sidebar-section {
+      margin-bottom: 18px;
+    }
+    
+    .sidebar-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      padding: 8px 12px;
+      letter-spacing: 0.04em;
+    }
+    
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #344054;
+      transition: all 0.18s ease;
+      border: 1px solid transparent;
+      margin-bottom: 4px;
+    }
+    
+    .sidebar-item:hover {
+      background: rgba(255, 255, 255, 0.66);
+      border-color: rgba(15, 23, 42, 0.05);
+      transform: translateY(-1px);
+      color: var(--text);
+    }
+    
+    .sidebar-item.active {
+      background: linear-gradient(180deg, rgba(10, 132, 255, 0.18), rgba(10, 132, 255, 0.12));
+      color: #0b3b75;
+      border-color: rgba(10, 132, 255, 0.18);
+    }
+    
+    .new-chat-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 13px 14px;
+      background: linear-gradient(180deg, #1992ff 0%, #0a84ff 100%);
+      color: white;
+      border: none;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+      box-shadow: 0 14px 26px rgba(10, 132, 255, 0.24);
+    }
+    
+    .new-chat-btn:hover {
+      opacity: 0.98;
+      transform: translateY(-1px);
+      box-shadow: 0 18px 28px rgba(10, 132, 255, 0.28);
+    }
+    
+    /* Main content */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(247, 250, 255, 0.34));
+      min-width: 0;
+    }
+    
+    /* Chat area */
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 36px 48px 24px;
+    }
+
+    .message-row {
+      max-width: 820px;
+      margin: 0 auto 18px;
+      display: flex;
+    }
+
+    .message-row.user {
+      justify-content: flex-end;
+    }
+
+    .message-row.assistant,
+    .message-row.tool {
+      justify-content: flex-start;
+    }
+
+    .message-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: min(78%, 760px);
+    }
+
+    .message-row.user .message-stack {
+      align-items: flex-end;
+    }
+
+    .message-row.assistant .message-stack,
+    .message-row.tool .message-stack {
+      align-items: flex-start;
+    }
+
+    .message-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 6px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.3;
+    }
+
+    .message-meta-badge {
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(10, 132, 255, 0.1);
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .message-meta-detail {
+      opacity: 0.92;
+    }
+    
+    .message {
+      padding: 16px 18px;
+      border-radius: 22px;
+      font-size: 15px;
+      line-height: 1.62;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      position: relative;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    
+    .message.user {
+      background: linear-gradient(180deg, #0a84ff 0%, #007aff 100%);
+      color: white;
+      border-color: rgba(10, 132, 255, 0.18);
+      border-bottom-right-radius: 10px;
+    }
+    
+    .message.assistant {
+      background: rgba(255, 255, 255, 0.84);
+      border-bottom-left-radius: 10px;
+    }
+    
+    .message.tool {
+      background: rgba(10, 132, 255, 0.06);
+      border: 1px solid rgba(10, 132, 255, 0.16);
+      color: #0b5fcc;
+      font-family: monospace;
+      font-size: 13px;
+      border-bottom-left-radius: 10px;
+    }
+    
+    /* Input area */
+    .input-container {
+      padding: 10px 34px 24px;
+      background: transparent;
+    }
+    
+    .input-wrapper {
+      max-width: 820px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      border-radius: 24px;
+      padding: 14px 14px 14px 18px;
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+    }
+    
+    .input-wrapper:focus-within {
+      border-color: rgba(10, 132, 255, 0.3);
+      box-shadow: 0 18px 45px rgba(10, 132, 255, 0.12);
+      transform: translateY(-1px);
+    }
+    
+    #message-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 15px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      max-height: 200px;
+      min-height: 28px;
+      line-height: 1.5;
+      padding: 4px 0;
+    }
+    
+    #message-input::placeholder {
+      color: var(--text-secondary);
+    }
+    
+    .send-btn {
+      background: linear-gradient(180deg, #1992ff 0%, #0a84ff 100%);
+      color: white;
+      border: none;
+      border-radius: 14px;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+      box-shadow: 0 10px 18px rgba(10, 132, 255, 0.24);
+    }
+    
+    .send-btn:hover {
+      opacity: 0.98;
+      transform: translateY(-1px);
+    }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .quick-model-select {
+      background: rgba(248, 250, 252, 0.96);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 9px 12px;
+      font-size: 12px;
+      max-width: 180px;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+    
+    .quick-model-select:hover {
+      border-color: rgba(10, 132, 255, 0.24);
+    }
+    
+    /* Model Switcher */
+    .model-switcher {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .model-switcher select {
+      background: rgba(248, 250, 252, 0.96);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 9px 12px;
+      font-size: 12px;
+      max-width: 180px;
+      cursor: pointer;
+    }
+    
+    .settings-btn {
+      background: rgba(248, 250, 252, 0.96);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 9px 11px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--text);
+    }
+    
+    .settings-btn:hover {
+      background: rgba(255, 255, 255, 1);
+      border-color: rgba(10, 132, 255, 0.24);
+    }
+    
+    /* Model Panel */
+    .model-panel {
+      position: fixed;
+      top: 14px;
+      right: -420px;
+      width: 380px;
+      height: calc(100vh - 28px);
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.82);
+      border-left: 1px solid rgba(255, 255, 255, 0.82);
+      border-radius: 28px 0 0 28px;
+      z-index: 1000;
+      transition: right 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-strong);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+    }
+    
+    .model-panel.active {
+      right: 14px;
+    }
+    
+    .model-panel-header {
+      padding: 24px 24px 18px;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .model-panel-header h3 {
+      margin: 0;
+      color: var(--text);
+      font-size: 19px;
+      letter-spacing: -0.02em;
+    }
+    
+    .model-panel-content {
+      padding: 20px 24px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    
+    .config-section {
+      margin-bottom: 18px;
+    }
+    
+    .config-section label {
+      display: block;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .config-section select,
+    .config-section input {
+      width: 100%;
+      padding: 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 14px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+    
+    .save-config-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(180deg, #1992ff 0%, #0a84ff 100%);
+      color: white;
+      border: none;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 20px;
+      box-shadow: 0 14px 24px rgba(10, 132, 255, 0.24);
+    }
+    
+    .save-config-btn:hover {
+      background: var(--accent-dark);
+    }
+    
+    /* Status */
+    .status-bar {
+      background: rgba(255, 255, 255, 0.58);
+      border-top: 1px solid rgba(255, 255, 255, 0.72);
+      padding: 12px 22px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #98a2b3;
+      box-shadow: 0 0 0 4px rgba(152, 162, 179, 0.14);
+    }
+    
+    .status-dot.connected {
+      background: #30d158;
+      box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.14);
+    }
+    
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.24);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+    
+    .modal-overlay.active { display: flex; }
+    
+    .modal {
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      border-radius: 26px;
+      padding: 28px;
+      width: 480px;
+      max-width: 95%;
+      max-height: 85vh;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+      box-shadow: var(--shadow-strong);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+    }
+    
+    .modal h2 {
+      font-size: 21px;
+      margin-bottom: 20px;
+      letter-spacing: -0.03em;
+    }
+    
+    .form-group { margin-bottom: 16px; }
+    
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 14px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    }
+    
+    #settings-model {
+      width: 100%;
+      height: auto;
+      min-height: 48px;
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px;
+    }
+    
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: rgba(10, 132, 255, 0.28);
+      box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.12);
+    }
+    
+    .modal-buttons { display: flex; gap: 12px; margin-top: 20px; }
+    
+    .modal-btn {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      font-weight: 600;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+    }
+    
+    .modal-btn.primary {
+      background: linear-gradient(180deg, #1992ff 0%, #0a84ff 100%);
+      color: white;
+      box-shadow: 0 14px 24px rgba(10, 132, 255, 0.24);
+    }
+    .modal-btn.secondary {
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--text);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+    }
+    .modal-btn:hover {
+      opacity: 0.98;
+      transform: translateY(-1px);
+    }
+
+    .settings-modal {
+      width: 640px;
+      padding: 0;
+      overflow: hidden;
+      max-height: min(88vh, 820px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .settings-shell {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .settings-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 28px 28px 20px;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 100%),
+        linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(90, 200, 250, 0.06));
+    }
+
+    .settings-heading {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .settings-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      background: linear-gradient(180deg, #1992ff 0%, #0a84ff 100%);
+      color: white;
+      box-shadow: 0 16px 28px rgba(10, 132, 255, 0.24);
+      flex: 0 0 auto;
+    }
+
+    .settings-title h2 {
+      margin: 0;
+    }
+
+    .settings-title p {
+      margin-top: 6px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      max-width: 420px;
+    }
+
+    .settings-close {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.18s ease;
+    }
+
+    .settings-close:hover {
+      background: rgba(255, 255, 255, 0.96);
+      color: var(--text);
+      border-color: var(--border-strong);
+    }
+
+    .settings-body {
+      padding: 22px 28px 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .settings-card {
+      padding: 18px;
+      border-radius: 20px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      background: rgba(255, 255, 255, 0.68);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+    }
+
+    .settings-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .settings-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .settings-card-description {
+      margin-top: 4px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+    }
+
+    .settings-badge {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(10, 132, 255, 0.1);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .settings-grid .form-group {
+      margin-bottom: 0;
+    }
+
+    .settings-grid .form-group.full {
+      grid-column: 1 / -1;
+    }
+
+    .settings-help {
+      margin-top: 12px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+    }
+
+    .settings-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 28px 24px;
+      border-top: 1px solid rgba(15, 23, 42, 0.06);
+      background: rgba(255, 255, 255, 0.34);
+    }
+
+    .settings-footer-copy {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      max-width: 320px;
+    }
+
+    .settings-footer-actions {
+      display: flex;
+      gap: 12px;
+      min-width: 240px;
+    }
+
+    .settings-chatgpt-box {
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid rgba(15, 23, 42, 0.07);
+      border-radius: 16px;
+    }
+
+    .settings-chatgpt-copy {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+      line-height: 1.45;
+    }
+
+    .settings-chatgpt-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .settings-chatgpt-status {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .settings-chatgpt-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .settings-chatgpt-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .settings-chatgpt-cta {
+      flex: 0 0 auto;
+      min-width: 196px;
+    }
+
+    .refresh-btn {
+      margin-left: 8px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      cursor: pointer;
+    }
+    
+    .refresh-btn:hover { background: var(--surface-hover); }
+    
+    /* Progress bar */
+    .progress-container {
+      display: none;
+      margin-top: 20px;
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.72);
+      border-radius: 18px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+    }
+    
+    .progress-container.active { display: block; }
+    
+    .progress-label {
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: var(--text-secondary);
+    }
+    
+    .progress-bar {
+      height: 8px;
+      background: rgba(15, 23, 42, 0.08);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #5ac8fa, #0a84ff);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+    
+    .progress-status {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    
+    .progress-logs {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: rgba(247, 250, 252, 0.9);
+      border-radius: 10px;
+      font-family: monospace;
+      font-size: 11px;
+      max-height: 100px;
+      overflow-y: auto;
+      color: #475467;
+    }
+    
+    /* Empty state */
+    .empty {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    
+    .empty h1 {
+      font-size: 40px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: -0.04em;
+      background: linear-gradient(135deg, #0a84ff, #5ac8fa 55%, #34c759);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .empty p {
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(102, 112, 133, 0.24);
+      border-radius: 4px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b0f14;
+        --bg-secondary: #11161d;
+        --surface: rgba(17, 24, 39, 0.7);
+        --surface-strong: rgba(17, 24, 39, 0.88);
+        --surface-hover: rgba(24, 32, 45, 0.96);
+        --border: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.16);
+        --accent: #0a84ff;
+        --accent-dark: #409cff;
+        --accent-soft: rgba(10, 132, 255, 0.18);
+        --text: #f5f7fb;
+        --text-secondary: #9aa4b2;
+        --input-bg: rgba(18, 24, 33, 0.9);
+        --shadow-soft: 0 14px 40px rgba(0, 0, 0, 0.34);
+        --shadow-strong: 0 24px 60px rgba(0, 0, 0, 0.46);
+      }
+
+      html, body {
+        color-scheme: dark;
+      }
+
+      body {
+        background:
+          radial-gradient(circle at top left, rgba(10, 132, 255, 0.18), transparent 28%),
+          radial-gradient(circle at top right, rgba(52, 199, 89, 0.1), transparent 24%),
+          linear-gradient(180deg, #0b0f14 0%, #11161d 100%);
+      }
+
+      .app {
+        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(8, 12, 18, 0.42);
+      }
+
+      .sidebar {
+        background: linear-gradient(180deg, rgba(15, 20, 28, 0.88), rgba(12, 17, 24, 0.72));
+        border-right-color: rgba(255, 255, 255, 0.06);
+      }
+
+      .sidebar-item {
+        color: #c4ccd8;
+      }
+
+      .sidebar-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.04);
+      }
+
+      .sidebar-item.active {
+        color: #dbeafe;
+        background: linear-gradient(180deg, rgba(10, 132, 255, 0.22), rgba(10, 132, 255, 0.12));
+        border-color: rgba(10, 132, 255, 0.2);
+      }
+
+      .main {
+        background: linear-gradient(180deg, rgba(12, 17, 24, 0.62), rgba(8, 12, 18, 0.42));
+      }
+
+      .message {
+        border-color: rgba(255, 255, 255, 0.06);
+      }
+
+      .message.assistant {
+        background: rgba(17, 24, 39, 0.82);
+      }
+
+      .message.tool {
+        background: rgba(10, 132, 255, 0.12);
+        color: #8ec5ff;
+      }
+
+      .message-meta-badge {
+        background: rgba(10, 132, 255, 0.18);
+      }
+
+      .input-wrapper {
+        background: rgba(13, 18, 25, 0.86);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+
+      .quick-model-select,
+      .model-switcher select,
+      .settings-btn {
+        background: rgba(22, 28, 38, 0.95);
+        border-color: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+      }
+
+      .model-panel {
+        background: rgba(13, 18, 25, 0.9);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+
+      .model-panel-header {
+        border-bottom-color: rgba(255, 255, 255, 0.06);
+      }
+
+      .status-bar {
+        background: rgba(12, 17, 24, 0.7);
+        border-top-color: rgba(255, 255, 255, 0.06);
+      }
+
+      .modal {
+        background: rgba(13, 18, 25, 0.9);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+
+      .form-group input,
+      .form-group select,
+      .form-group textarea,
+      #settings-model,
+      .config-section select,
+      .config-section input,
+      .refresh-btn,
+      .modal-btn.secondary {
+        background: rgba(18, 24, 33, 0.92);
+        border-color: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      }
+
+      .progress-container {
+        background: rgba(17, 24, 39, 0.72);
+        border-color: rgba(255, 255, 255, 0.06);
+      }
+
+      .progress-bar {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .progress-logs {
+        background: rgba(8, 12, 18, 0.8);
+        color: #b8c1cc;
+      }
+
+      .settings-header,
+      .settings-footer {
+        border-color: rgba(255, 255, 255, 0.06);
+      }
+
+      .settings-close,
+      .settings-chatgpt-box,
+      .settings-card {
+        background: rgba(17, 24, 39, 0.74);
+        border-color: rgba(255, 255, 255, 0.08);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+      }
+
+      .settings-footer {
+        background: rgba(13, 18, 25, 0.42);
+      }
+    }
+
+    @media (max-width: 980px) {
+      body {
+        overflow: auto;
+      }
+
+      .app {
+        margin: 0;
+        height: auto;
+        min-height: 100%;
+        border-radius: 0;
+      }
+
+      .sidebar {
+        width: 240px;
+      }
+
+      .chat-container {
+        padding: 24px 20px 18px;
+      }
+
+      .input-container {
+        padding: 10px 16px 18px;
+      }
+
+      .model-panel {
+        top: 0;
+        height: 100vh;
+        border-radius: 24px 0 0 24px;
+      }
+
+      .settings-modal {
+        width: min(92vw, 640px);
+      }
+    }
+
+    @media (max-width: 760px) {
+      .app {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.52);
+      }
+
+      .main {
+        min-height: 65vh;
+      }
+
+      .input-wrapper {
+        flex-wrap: wrap;
+      }
+
+      .model-switcher {
+        width: 100%;
+        order: 2;
+      }
+
+      .model-switcher select,
+      .quick-model-select {
+        flex: 1;
+        max-width: none;
+      }
+
+      .send-btn {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+      }
+
+      .settings-header,
+      .settings-body,
+      .settings-footer {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+
+      .settings-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .settings-footer {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .settings-footer-actions {
+        min-width: 0;
+      }
+
+      .settings-chatgpt-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="window-dragbar">Super Power Ai</div>
+
+  
+  <div class="app">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo"></div>
+        <span class="logo-text">Super Power Ai</span>
+      </div>
+      
+      <button class="new-chat-btn" onclick="newChat()">
+        <span>+</span> New Chat
+      </button>
+      
+      <div class="sidebar-section">
+        <div class="sidebar-title">History</div>
+        <div id="sessions-list"></div>
+      </div>
+      
+      <div class="sidebar-section" style="margin-top: auto;">
+        <div class="sidebar-item" onclick="showWorktogether()">
+          🤝 Worktogether
+        </div>
+        <div class="sidebar-item" onclick="showHeretic()">
+          🔓 Decensor
+        </div>
+        <div class="sidebar-item" onclick="showSettings()">
+          ⚙️ Settings
+        </div>
+      </div>
+    </div>
+    
+    <!-- Main -->
+    <div class="main">
+      <div class="chat-container" id="chat-container">
+        <div class="empty">
+          <h1>Super Power Ai</h1>
+          <p>Your AI assistant for macOS</p>
+          <p style="margin-top: 16px; font-size: 13px;">Type a message to start</p>
+        </div>
+      </div>
+      
+      <div class="input-container">
+        <div class="input-wrapper">
+          <textarea id="message-input" placeholder="Message Super Power Ai..." rows="1"></textarea>
+          
+          <!-- Model Switcher - always visible -->
+          <div class="model-switcher">
+            <select id="quick-model-select" onchange="switchModel(this.value)">
+              <option value="">🤖 Model</option>
+            </select>
+            <button class="settings-btn" onclick="showModelPanel()" title="Config">⚙️</button>
+          </div>
+          
+          <button class="send-btn" id="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+      
+      <!-- Simple Model Configuration Panel (Slide from right) -->
+      <div id="model-panel" class="model-panel">
+        <div class="model-panel-header">
+          <h3>Configuration</h3>
+          <button onclick="hideModelPanel()" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;">✕</button>
+        </div>
+        
+        <div class="model-panel-content">
+          <div class="config-section">
+            <label>Provider</label>
+            <select id="panel-provider" onchange="loadPanelModels()">
+              <option value="ollama">🤖 Ollama</option>
+              <option value="lmstudio">💻 LM Studio</option>
+              <option value="openai">🔑 OpenAI</option>
+              <option value="anthropic">🔑 Anthropic</option>
+              <option value="gemini">🔑 Google Gemini</option>
+              <option value="mistral">🔑 Mistral</option>
+              <option value="groq">🔑 Groq</option>
+              <option value="cohere">🔑 Cohere</option>
+              <option value="huggingface">🔑 HuggingFace</option>
+            </select>
+          </div>
+          
+          <div class="config-section">
+            <label>API Key</label>
+            <input type="password" id="panel-api-key" placeholder="Paste your API key..." onchange="loadPanelModels()">
+          </div>
+          
+          <div class="config-section">
+            <label>Model</label>
+            <select id="panel-model" onchange="selectPanelModel()">
+              <option value="">Select model</option>
+            </select>
+          </div>
+          
+          <button class="save-config-btn" onclick="savePanelConfig()">Save & Use</button>
+        </div>
+      </div>
+      
+      <div class="status-bar">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Connecting...</span>
+        <span style="margin-left: auto; color: var(--accent);">By ZK</span>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Settings Modal - Clean ChatGPT style -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal settings-modal">
+      <div class="settings-shell">
+        <div class="settings-header">
+          <div class="settings-heading">
+            <div class="settings-icon">⚙️</div>
+            <div class="settings-title">
+              <h2>Settings</h2>
+              <p>Configure the active provider, model selection and account access used by Super Power Ai without changing the rest of the app.</p>
+            </div>
+          </div>
+          <button class="settings-close" onclick="closeSettings()" aria-label="Close settings">✕</button>
+        </div>
+
+        <div class="settings-body">
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div>
+                <div class="settings-card-title">Provider</div>
+                <div class="settings-card-description">Choose where the assistant should run and which catalog of models to load.</div>
+              </div>
+              <div class="settings-badge">Core</div>
+            </div>
+
+            <div class="settings-grid">
+              <div class="form-group full">
+                <label>Provider</label>
+                <select id="settings-provider">
+                  <option value="ollama">🤖 Ollama (Local)</option>
+                  <option value="lmstudio">💻 LM Studio (Local)</option>
+                  <option value="openai">🔑 OpenAI</option>
+                  <option value="anthropic">🔑 Anthropic</option>
+                  <option value="gemini">🔑 Google Gemini</option>
+                  <option value="mistral">🔑 Mistral</option>
+                  <option value="groq">🔑 Groq</option>
+                  <option value="cohere">🔑 Cohere</option>
+                  <option value="huggingface">🔑 HuggingFace</option>
+                </select>
+              </div>
+
+              <div class="form-group full">
+                <label>Model</label>
+                <select id="settings-model">
+                  <option value="">Select a model</option>
+                </select>
+              </div>
+
+              <div class="form-group full" id="base_url_group" style="display: none;">
+                <label>Local URL</label>
+                <input type="text" id="settings-base_url" placeholder="http://localhost:11434">
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div>
+                <div class="settings-card-title">Credentials</div>
+                <div class="settings-card-description">Add an API key for cloud providers or connect a ChatGPT account when OpenAI is selected.</div>
+              </div>
+              <div class="settings-badge">Access</div>
+            </div>
+
+            <div class="settings-grid">
+              <div class="form-group full" id="api-key-group">
+                <label>API Key</label>
+                <input type="password" id="settings-api_key" placeholder="Paste your API key...">
+              </div>
+
+              <div class="form-group full" id="chatgpt-connect-group" style="display: none;">
+                <label>ChatGPT Account</label>
+                <div class="settings-chatgpt-box">
+                  <div class="settings-chatgpt-copy">Connect your ChatGPT Pro/Plus account through OpenCode OAuth to fetch the OpenAI model list directly inside the app.</div>
+                  <div class="settings-chatgpt-row">
+                    <div class="settings-chatgpt-status">
+                      <div class="settings-chatgpt-title">OpenAI account</div>
+                      <div id="chatgpt-connect-status" class="settings-chatgpt-meta">Not connected</div>
+                    </div>
+                    <button id="chatgpt-connect-btn" onclick="connectChatGPT()" class="modal-btn primary settings-chatgpt-cta">Connect ChatGPT</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-help">Local providers hide remote credentials automatically. Cloud providers reload their available models when the key changes.</div>
+          </div>
+        </div>
+
+        <div class="settings-footer">
+          <div class="settings-footer-copy">Changes apply to the active session and update the quick model picker used in the main chat composer.</div>
+          <div class="settings-footer-actions">
+            <button onclick="closeSettings()" class="modal-btn secondary">Cancel</button>
+            <button onclick="saveSettings()" class="modal-btn primary">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Heretic Modal -->
+  <div class="modal-overlay" id="heretic-modal">
+    <div class="modal">
+      <h2>🔓 Decensor Model (Heretic)</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 13px;">
+        Remove censorship from AI models using Heretic abliteration technology.
+      </p>
+      <div class="form-group">
+        <label>Model to Decensor</label>
+        <div style="display: flex; gap: 8px;">
+          <select id="heretic-model-select" style="flex: 1;">
+            <option value="">Select from Ollama...</option>
+          </select>
+          <button type="button" class="refresh-btn" onclick="loadOllamaModels()">↻</button>
+        </div>
+        <input type="text" id="heretic-model-manual" placeholder="Or enter HuggingFace model (e.g. Qwen/Qwen3-4B)" style="margin-top: 8px;">
+      </div>
+      <div class="form-group">
+        <label>Quantization</label>
+        <select id="heretic-quantization">
+          <option value="NONE">None (Full precision)</option>
+          <option value="BNB_4BIT">4-bit (Low VRAM)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Output Model Name (optional)</label>
+        <input type="text" id="heretic-output" placeholder="my-model-heretic">
+      </div>
+      <div class="form-group">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="heretic-ollama" checked style="width: auto;">
+          Import to Ollama after decensoring
+        </label>
+      </div>
+      <div class="modal-buttons">
+        <button class="modal-btn secondary" onclick="closeHeretic()">Cancel</button>
+        <button class="modal-btn primary" style="background: var(--accent);" onclick="runHeretic()">Start Decensoring</button>
+      </div>
+      
+      <!-- Progress -->
+      <div class="progress-container" id="heretic-progress">
+        <div class="progress-label">
+          <span id="progress-model-name">Decensoring...</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+        <div class="progress-status" id="progress-status">Starting...</div>
+        <div class="progress-logs" id="progress-logs"></div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Worktogether Modal -->
+  <div class="modal-overlay" id="worktogether-modal">
+    <div class="modal" style="width: 500px;">
+      <h2>🤝 Worktogether - Agent System</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 13px;">
+        Autonomous multi-agent system that develops, tests and fixes code automatically.
+      </p>
+      <div class="form-group">
+        <label>What do you want to build?</label>
+        <textarea id="worktogether-goal" rows="3" placeholder="e.g., create a Python script that fetches weather data"></textarea>
+      </div>
+      <div class="form-group">
+        <label>LLM Provider</label>
+        <select id="worktogether-provider" onchange="updateWorktogetherModels()">
+          <option value="">Loading providers...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Model</label>
+        <select id="worktogether-model">
+          <option value="">Loading...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>API Key (if needed)</label>
+        <input type="password" id="worktogether-apikey" placeholder="API key for OpenAI/Claude/Gemini">
+      </div>
+      <div class="form-group">
+        <label>Base URL (optional, for custom endpoints)</label>
+        <input type="text" id="worktogether-baseurl" placeholder="http://localhost:11434">
+      </div>
+      <div class="modal-buttons">
+        <button class="modal-btn secondary" onclick="closeWorktogether()">Cancel</button>
+        <button class="modal-btn primary" style="background: var(--accent);" onclick="startWorktogether()">🚀 Start Building</button>
+      </div>
+      
+      <!-- Progress -->
+      <div class="progress-container" id="worktogether-progress">
+        <div class="progress-label">
+          <span id="worktogether-status">Initializing...</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="worktogether-fill" style="width: 0%"></div>
+        </div>
+        <div class="progress-status" id="worktogether-tasks">0 tasks</div>
+        <div class="progress-logs" id="worktogether-logs"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let ws;
+    let sessions = [];
+    let currentSession = null;
+    let hereticPolling = null;
+    let lastAssistantMetaEl = null;
+    
+    function initProviders() {
+      // Charger les providers dynamiques
+      fetch('/api/worktogether/providers').then(function(r) { return r.json(); }).then(function(d) {
+        var select = document.getElementById('worktogether-provider');
+        if (select) {
+          select.innerHTML = d.providers.map(function(p) {
+            var label = p.name;
+            if (p.id === 'ollama' || p.id === 'lmstudio') label += ' (Local)';
+            else label += ' ☁';
+            return '<option value="' + p.id + '">' + label + '</option>';
+          }).join('');
+          
+          // Trigger model update
+          updateWorktogetherModels();
+        }
+      });
+    }
+    
+    function connect() {
+      ws = new WebSocket('ws://' + location.host + '/ws');
+      
+      ws.onopen = function() {
+        document.getElementById('status-dot').classList.add('connected');
+        document.getElementById('status-text').textContent = 'Ready';
+        document.getElementById('send-btn').disabled = false;
+        loadHistory();
+        initProviders(); // Initialize providers
+        loadQuickModels(); // Load models for quick switch
+      };
+      
+      ws.onclose = function() {
+        document.getElementById('status-dot').classList.remove('connected');
+        document.getElementById('status-text').textContent = 'Disconnected';
+        document.getElementById('send-btn').disabled = true;
+        setTimeout(connect, 3000);
+      };
+      
+      ws.onmessage = function(e) {
+        var d = JSON.parse(e.data);
+        if (d.event_type === 'typing' || d.type === 'typing') return;
+        
+        // Remove empty state
+        var empty = document.querySelector('.empty');
+        if (empty) empty.remove();
+
+        if (d.event_type === 'execution_meta') {
+          renderExecutionMeta(d);
+          document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
+          return;
+        }
+
+        appendAssistantEvent(d);
+        document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
+      };
+    }
+
+    function getCurrentModelLabel() {
+      var quick = document.getElementById('quick-model-select');
+      if (quick && quick.value) return quick.value;
+      return 'ChatGPT';
+    }
+
+    function createMessageShell(role, text, metaHtml, extraClass) {
+      var row = document.createElement('div');
+      row.className = 'message-row ' + role;
+
+      var stack = document.createElement('div');
+      stack.className = 'message-stack';
+
+      if (metaHtml) {
+        var meta = document.createElement('div');
+        meta.className = 'message-meta';
+        meta.innerHTML = metaHtml;
+        stack.appendChild(meta);
+      }
+
+      var bubble = document.createElement('div');
+      bubble.className = 'message ' + role + (extraClass ? ' ' + extraClass : '');
+      bubble.textContent = text || '';
+      stack.appendChild(bubble);
+
+      row.appendChild(stack);
+      return row;
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderExecutionMeta(d) {
+      if (!lastAssistantMetaEl) return;
+
+      var requested = [d.requested_provider, d.requested_model].filter(Boolean).join(' • ');
+      var actual = [d.actual_provider, d.actual_model].filter(Boolean).join(' • ');
+      var detail = actual ? ('Utilisé: ' + actual) : '';
+
+      if (requested && actual && requested !== actual) {
+        detail = 'Demandé: ' + requested + ' → Utilisé: ' + actual;
+      }
+
+      if (d.fallback_reason) {
+        detail += (detail ? ' • ' : '') + 'Fallback: ' + d.fallback_reason;
+      }
+
+      if (!detail) return;
+
+      lastAssistantMetaEl.innerHTML =
+        '<span class="message-meta-badge">Exécution</span><span class="message-meta-detail">' + escapeHtml(detail) + '</span>';
+    }
+
+    function appendAssistantEvent(d) {
+      var container = document.getElementById('chat-container');
+      var metaHtml = '';
+
+      if (d.event_type === 'tool_call') {
+        metaHtml = '<span class="message-meta-badge">Action</span><span>L’agent prépare une action système</span>';
+        container.appendChild(createMessageShell('tool', '⚙ ' + (d.tool_name || 'Tool'), metaHtml));
+        return;
+      }
+
+      if (d.event_type === 'error') {
+        metaHtml = '<span class="message-meta-badge">ChatGPT</span><span>Erreur pendant la réponse</span>';
+        var errorRow = createMessageShell('assistant', d.content || 'Une erreur est survenue.', metaHtml);
+        container.appendChild(errorRow);
+        lastAssistantMetaEl = errorRow.querySelector('.message-meta');
+        return;
+      }
+
+      metaHtml = '<span class="message-meta-badge">ChatGPT</span><span>' + getCurrentModelLabel() + ' • Réponse de l’IA</span>';
+      var row = createMessageShell('assistant', d.content || '', metaHtml);
+      container.appendChild(row);
+      lastAssistantMetaEl = row.querySelector('.message-meta');
+    }
+    
+    function loadHistory() {
+      fetch('/api/sessions').then(function(r) { return r.json(); }).then(function(d) {
+        sessions = d.sessions || [];
+        updateSidebar();
+      });
+    }
+    
+    function updateSidebar() {
+      var list = document.getElementById('sessions-list');
+      if (!sessions.length) {
+        list.innerHTML = '<div class="sidebar-item">No conversations</div>';
+        return;
+      }
+      list.innerHTML = sessions.slice(0, 20).map(function(s) {
+        var name = s.name || s.id.substring(0, 8);
+        return '<div class="sidebar-item" onclick="loadSession(\'' + s.id + '\')">' + name + '</div>';
+      }).join('');
+    }
+    
+    function newChat() {
+      fetch('/api/sessions', {method: 'POST'}).then(function(r) { return r.json(); }).then(function(s) {
+        sessions.unshift(s);
+        currentSession = s.id;
+        updateSidebar();
+        document.getElementById('chat-container').innerHTML = '<div class="empty"><h1>MacAgent-OS</h1><p>New conversation started</p></div>';
+      });
+    }
+    
+    function loadSession(id) {
+      currentSession = id;
+      // For now, just clear and start fresh
+      document.getElementById('chat-container').innerHTML = '<div class="empty"><h1>MacAgent-OS</h1><p>Session: ' + id + '</p></div>';
+    }
+    
+    function sendMessage() {
+      var input = document.getElementById('message-input');
+      var text = input.value.trim();
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+      lastAssistantMetaEl = null;
+      
+      // Remove empty state
+      var empty = document.querySelector('.empty');
+      if (empty) empty.remove();
+      
+      // Add user message
+      var userMeta = '<span>You</span><span>Message envoyé</span>';
+      var userNode = createMessageShell('user', text, userMeta);
+      document.getElementById('chat-container').appendChild(userNode);
+      
+      input.value = '';
+      input.style.height = 'auto';
+      document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
+      
+      ws.send(text);
+    }
+
+    function saveSettingsSilently(data) {
+      return fetch('/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      }).then(function(r) { return r.json(); });
+    }
+    
+    // Load all available models for quick switch - refresh on click
+    function loadQuickModels() {
+      var select = document.getElementById('quick-model-select');
+      
+      // First get settings (to get API key and current model)
+      fetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
+        var provider = s.provider || 'ollama';
+        var currentModel = s.model || '';
+        
+        // Build URL with API key if available
+        var apiKey = '';
+        if (s.api_key && s.api_key !== true) {
+          apiKey = s.api_key;
+        }
+        
+        var url = '/api/llm/models/' + provider;
+        if (apiKey && provider !== 'ollama' && provider !== 'lmstudio') {
+          url += '?api_key=' + encodeURIComponent(apiKey);
+        }
+        
+        // Fetch models
+        fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+          var models = d.models || [];
+          
+          if (models.length === 0) {
+            select.innerHTML = '<option value="">No models</option>';
+            return;
+          }
+
+          var resolvedModel = currentModel;
+          if (!resolvedModel || models.indexOf(resolvedModel) === -1) {
+            resolvedModel = models[0];
+            saveSettingsSilently({
+              provider: provider,
+              model: resolvedModel,
+              api_key: apiKey,
+              base_url: s.base_url || ''
+            });
+          }
+          
+          var options = '';
+          for (var i = 0; i < models.length; i++) {
+            var selected = (models[i] === resolvedModel) ? ' selected' : '';
+            options += '<option value="' + models[i] + '"' + selected + '>' + models[i] + '</option>';
+          }
+          select.innerHTML = options;
+          select.value = resolvedModel;
+        });
+      });
+    }
+    
+    // Refresh models when clicking on the select
+    document.getElementById('quick-model-select').addEventListener('click', loadQuickModels);
+    
+    // Switch model and save immediately
+    function switchModel(modelName) {
+      if (!modelName) return;
+      
+      fetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
+        var data = {
+          provider: s.provider || 'ollama',
+          model: modelName,
+          api_key: s.api_key || '',
+          base_url: s.base_url || ''
+        };
+        
+        fetch('/api/settings', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(data)
+        });
+      });
+    }
+    
+    // Load models on connect
+    var originalConnect = null;
+    
+    // Auto-resize textarea
+    document.getElementById('message-input').addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+    });
+    
+    // Enter to send
+    document.getElementById('message-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    
+    // Helper function to load models for a specific provider
+    function loadModelsForProvider(provider, apiKey) {
+      var modelSelect = document.getElementById('settings-model');
+      modelSelect.innerHTML = '<option value="">Loading...</option>';
+      
+      var url = '/api/llm/models/' + provider;
+      if (apiKey && provider !== 'ollama' && provider !== 'lmstudio') {
+        url += '?api_key=' + encodeURIComponent(apiKey);
+      }
+      
+      fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+        var models = d.models || [];
+        
+        if (models.length === 0) {
+          modelSelect.innerHTML = '<option value="">No models available</option>';
+          return;
+        }
+        
+        var options = '';
+        for (var i = 0; i < models.length; i++) {
+          options += '<option value="' + models[i] + '">' + models[i] + '</option>';
+        }
+        modelSelect.innerHTML = options;
+        
+      }).catch(function(e) {
+        console.error('Error loading models:', e);
+        modelSelect.innerHTML = '<option value="">Error loading models</option>';
+      });
+    }
+    
+    // === SETTINGS ===
+    
+    var settingsLoaded = false;
+    var currentApiKey = '';
+    var chatgptPolling = null;
+
+    function updateChatGPTConnectVisibility(provider) {
+      var group = document.getElementById('chatgpt-connect-group');
+      if (!group) return;
+      group.style.display = provider === 'openai' ? 'block' : 'none';
+      if (provider === 'openai') loadChatGPTStatus();
+    }
+
+    function renderChatGPTStatus(data) {
+      var statusEl = document.getElementById('chatgpt-connect-status');
+      var btn = document.getElementById('chatgpt-connect-btn');
+      if (!statusEl || !btn) return;
+
+      if (data.oauth && data.oauth.connected) {
+        statusEl.textContent = 'Connected. The app can load OpenAI models from your linked account, but sending messages still requires OpenAI Platform API access.';
+        btn.textContent = 'Refresh OpenAI Models';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        if (chatgptPolling) {
+          clearInterval(chatgptPolling);
+          chatgptPolling = null;
+        }
+        loadModelsForProvider('openai', '');
+        loadQuickModels();
+        return;
+      }
+
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.textContent = data.running ? 'Waiting for Authorization...' : 'Connect ChatGPT';
+
+      if (data.error) statusEl.textContent = data.error;
+      else if (data.url) statusEl.textContent = 'Browser login started. Finish the OpenAI authorization flow, then your models will refresh automatically.';
+      else if (data.oauth && data.oauth.expired) statusEl.textContent = 'Connection expired. Reconnect your ChatGPT account to reload OpenAI models.';
+      else statusEl.textContent = 'Not connected';
+    }
+
+    function loadChatGPTStatus() {
+      fetch('/api/chatgpt/status').then(function(r) { return r.json(); }).then(function(data) {
+        renderChatGPTStatus(data);
+        if (data.running && !chatgptPolling) {
+          chatgptPolling = setInterval(loadChatGPTStatus, 2000);
+        }
+      });
+    }
+
+    function connectChatGPT() {
+      var statusEl = document.getElementById('chatgpt-connect-status');
+      var btn = document.getElementById('chatgpt-connect-btn');
+      if (btn && btn.textContent === 'Refresh OpenAI Models') {
+        if (statusEl) statusEl.textContent = 'Refreshing OpenAI models...';
+        loadModelsForProvider('openai', '');
+        loadQuickModels();
+        setTimeout(function() {
+          loadChatGPTStatus();
+        }, 300);
+        return;
+      }
+
+      fetch('/api/chatgpt/connect', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        renderChatGPTStatus(data);
+        if (data.url) window.open(data.url, '_blank');
+        if (!chatgptPolling) {
+          chatgptPolling = setInterval(loadChatGPTStatus, 2000);
+        }
+      }).catch(function() {
+        var statusEl = document.getElementById('chatgpt-connect-status');
+        if (statusEl) statusEl.textContent = 'Unable to start ChatGPT connection';
+      });
+    }
+    
+    function showSettings() {
+      var providerSelect = document.getElementById('settings-provider');
+      var modelSelect = document.getElementById('settings-model');
+      var apiKeyInput = document.getElementById('settings-api_key');
+      var baseUrlGroup = document.getElementById('base_url_group');
+      var apiKeyGroup = document.getElementById('api-key-group');
+      
+      // Helper: check if local provider
+      var isLocal = function(p) {
+        return p === 'ollama' || p === 'lmstudio';
+      };
+      
+      // When provider changes - show/hide appropriate fields
+      providerSelect.onchange = function() {
+        var provider = this.value;
+        
+        // Show/hide fields based on provider type
+        if (isLocal(provider)) {
+          baseUrlGroup.style.display = 'block';
+          apiKeyGroup.style.display = 'none';
+          apiKeyInput.value = '';
+        } else {
+          baseUrlGroup.style.display = 'none';
+          apiKeyGroup.style.display = 'block';
+        }
+        updateChatGPTConnectVisibility(provider);
+        
+        // Load models (no API key for local, will use settings)
+        var apiKey = isLocal(provider) ? '' : apiKeyInput.value;
+        loadModelsForProvider(provider, apiKey);
+      };
+      
+      // When API key changes - reload models with the new key
+      apiKeyInput.onchange = function() {
+        var provider = providerSelect.value;
+        if (!isLocal(provider)) {
+          loadModelsForProvider(provider, this.value);
+        }
+      };
+      
+      // Load settings and populate
+      fetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
+        var provider = s.provider || 'ollama';
+        var apiKey = (s.api_key && s.api_key !== true) ? s.api_key : '';
+        
+        // Set provider
+        providerSelect.value = provider;
+        
+        // Show/hide fields
+        if (isLocal(provider)) {
+          baseUrlGroup.style.display = 'block';
+          apiKeyGroup.style.display = 'none';
+          document.getElementById('settings-base_url').value = s.base_url || '';
+          apiKeyInput.value = '';
+        } else {
+          baseUrlGroup.style.display = 'none';
+          apiKeyGroup.style.display = 'block';
+          apiKeyInput.value = apiKey;
+        }
+        updateChatGPTConnectVisibility(provider);
+        
+        // Load models with the API key
+        loadModelsForProvider(provider, isLocal(provider) ? '' : apiKey);
+        
+        // Select saved model after load
+        setTimeout(function() {
+          if (modelSelect.options.length > 0) {
+            var selected = false;
+            for (var i = 0; i < modelSelect.options.length; i++) {
+              if (modelSelect.options[i].value === s.model) {
+                modelSelect.selectedIndex = i;
+                selected = true;
+                break;
+              }
+            }
+            if (!selected) {
+              modelSelect.selectedIndex = 0;
+            }
+          }
+        }, 500);
+        
+      }).catch(function(e) {
+        console.error('Error loading settings:', e);
+        loadModelsForProvider('ollama', '');
+      });
+      
+      document.getElementById('settings-modal').classList.add('active');
+    }
+    
+    function closeSettings() {
+      document.getElementById('settings-modal').classList.remove('active');
+    }
+    
+    function saveSettings() {
+      var provider = document.getElementById('settings-provider').value;
+      var model = document.getElementById('settings-model').value;
+      var apiKey = document.getElementById('settings-api_key').value;
+      var baseUrl = document.getElementById('settings-base_url').value;
+
+      if (!model) {
+        alert('Please select a model');
+        return;
+      }
+
+      var data = {
+        provider: provider,
+        model: model,
+        base_url: baseUrl,
+        api_key: apiKey
+      };
+
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      }).then(function(r) { return r.json(); }).then(function(result) {
+        closeSettings();
+        loadQuickModels();
+        var quickSelect = document.getElementById('quick-model-select');
+        if (quickSelect) {
+          quickSelect.value = model;
+        }
+        var btn = document.querySelector('#settings-modal .modal-btn.primary');
+        if (btn) {
+          var originalText = btn.textContent;
+          btn.textContent = 'Saved!';
+          setTimeout(function() { btn.textContent = originalText; }, 1500);
+        }
+      }).catch(function() {
+        alert('Unable to save settings');
+      });
+    }
+    
+    function loadOllamaModels() {
+      fetch('/api/models').then(function(r) { return r.json(); }).then(function(d) {
+        var select = document.getElementById('heretic-model-select');
+        select.innerHTML = '<option value="">Select from Ollama...</option>' + 
+          d.models.map(function(m) {
+            return '<option value="' + m + '">' + m + '</option>';
+          }).join('');
+      });
+    }
+    
+    function showHeretic() {
+      loadOllamaModels();
+      document.getElementById('heretic-modal').classList.add('active');
+    }
+    
+    function runHeretic() {
+      var select = document.getElementById('heretic-model-select');
+      var manual = document.getElementById('heretic-model-manual').value;
+      var model_name = select.value || manual;
+      
+      if (!model_name) {
+        alert('Please select or enter a model name');
+        return;
+      }
+      
+      var data = {
+        model_name: model_name,
+        quantization: document.getElementById('heretic-quantization').value,
+        output_name: document.getElementById('heretic-output').value || null,
+        upload_to_huggingface: false,
+        import_to_ollama: document.getElementById('heretic-ollama').checked
+      };
+      fetch('/api/heretic/run', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      }).then(function(r) { return r.json(); }).then(function(result) {
+        closeHeretic();
+        if (result.status === 'running') {
+          alert('Decensoring started! This may take a while. The model will be imported to Ollama automatically when complete.');
+        } else if (result.status === 'completed') {
+          alert('Decensoring complete! Model: ' + result.output);
+        } else {
+          alert('Error: ' + (result.stderr || result.error || 'Unknown error'));
+        }
+      });
+    }
+    
+    function closeHeretic() {
+      document.getElementById('heretic-modal').classList.remove('active');
+      document.getElementById('heretic-progress').classList.remove('active');
+      if (hereticPolling) {
+        clearInterval(hereticPolling);
+        hereticPolling = null;
+      }
+    }
+    
+    function updateHereticProgress() {
+      fetch('/api/heretic/progress').then(function(r) { return r.json(); }).then(function(p) {
+        if (!p.running && p.status === 'completed') {
+          document.getElementById('progress-fill').style.width = '100%';
+          document.getElementById('progress-status').textContent = '✅ Complete!';
+          document.getElementById('progress-logs').textContent = p.logs;
+          clearInterval(hereticPolling);
+          hereticPolling = null;
+          setTimeout(function() {
+            alert('Decensoring complete! The model is now available in Ollama.');
+          }, 500);
+        } else if (!p.running && p.status === 'failed') {
+          document.getElementById('progress-status').textContent = '❌ Failed';
+          document.getElementById('progress-logs').textContent = p.logs;
+          clearInterval(hereticPolling);
+          hereticPolling = null;
+        } else {
+          document.getElementById('progress-model-name').textContent = p.model + ' → ' + p.output;
+          document.getElementById('progress-fill').style.width = p.progress + '%';
+          var statusText = p.status;
+          if (p.status === 'starting') statusText = 'Initializing...';
+          else if (p.status === 'downloading') statusText = 'Downloading model...';
+          else if (p.status === 'benchmarking') statusText = 'Running benchmarks...';
+          else if (p.status === 'optimizing') statusText = 'Optimizing parameters...';
+          else if (p.status === 'applying') statusText = 'Applying abliteration...';
+          else if (p.status === 'saving') statusText = 'Saving model...';
+          else if (p.status === 'importing') statusText = 'Importing to Ollama...';
+          document.getElementById('progress-status').textContent = statusText + ' (' + p.progress + '%)';
+          document.getElementById('progress-logs').textContent = p.logs.slice(-500);
+        }
+      });
+    }
+    
+    function runHeretic() {
+      var select = document.getElementById('heretic-model-select');
+      var manual = document.getElementById('heretic-model-manual').value;
+      var model_name = select.value || manual;
+      
+      if (!model_name) {
+        alert('Please select or enter a model name');
+        return;
+      }
+      
+      var data = {
+        model_name: model_name,
+        quantization: document.getElementById('heretic-quantization').value,
+        output_name: document.getElementById('heretic-output').value || null,
+        upload_to_huggingface: false,
+        import_to_ollama: document.getElementById('heretic-ollama').checked
+      };
+      fetch('/api/heretic/run', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      }).then(function(r) { return r.json(); }).then(function(result) {
+        if (result.status === 'running') {
+          document.getElementById('heretic-progress').classList.add('active');
+          hereticPolling = setInterval(updateHereticProgress, 2000);
+        } else {
+          alert('Error: ' + (result.stderr || result.error || 'Unknown error'));
+        }
+      });
+    }
+    
+    let worktogetherPolling = null;
+    
+    function updateWorktogetherModels() {
+      var provider = document.getElementById('worktogether-provider').value;
+      fetch('/api/worktogether/providers').then(function(r) { return r.json(); }).then(function(d) {
+        var select = document.getElementById('worktogether-model');
+        var models = [];
+        if (provider === 'ollama') {
+          models = d.ollama_models || [];
+        } else {
+          var p = d.providers.find(function(x) { return x.id === provider; });
+          models = p ? p.models : [];
+        }
+        select.innerHTML = models.map(function(m) {
+          return '<option value="' + m + '">' + m + '</option>';
+        }).join('');
+        if (models.length > 0) {
+          select.value = models[0];
+        }
+      });
+    }
+    
+    function showWorktogether() {
+      updateWorktogetherModels();
+      document.getElementById('worktogether-modal').classList.add('active');
+    }
+    
+    function closeWorktogether() {
+      document.getElementById('worktogether-modal').classList.remove('active');
+      document.getElementById('worktogether-progress').classList.remove('active');
+      if (worktogetherPolling) {
+        clearInterval(worktogetherPolling);
+        worktogetherPolling = null;
+      }
+    }
+    
+    function updateWorktogetherProgress() {
+      fetch('/api/worktogether/status').then(function(r) { return r.json(); }).then(function(p) {
+        document.getElementById('worktogether-fill').style.width = p.progress + '%';
+        document.getElementById('worktogether-status').textContent = p.status || 'Running...';
+        document.getElementById('worktogether-tasks').textContent = (p.tasks?.length || 0) + ' tasks';
+        document.getElementById('worktogether-logs').textContent = (p.logs || '').slice(-500);
+        
+        if (!p.active && p.progress >= 100) {
+          clearInterval(worktogetherPolling);
+          worktogetherPolling = null;
+          document.getElementById('worktogether-status').textContent = '✅ Completed!';
+          alert('Worktogether completed! Check the logs for results.');
+        }
+      });
+    }
+    
+    function startWorktogether() {
+      var goal = document.getElementById('worktogether-goal').value;
+      var provider = document.getElementById('worktogether-provider').value;
+      var model = document.getElementById('worktogether-model').value;
+      var apiKey = document.getElementById('worktogether-apikey').value;
+      var baseUrl = document.getElementById('worktogether-baseurl').value;
+      
+      if (!goal) {
+        alert('Please enter what you want to build');
+        return;
+      }
+      
+      var data = {
+        goal: goal,
+        provider: provider,
+        model: model,
+        api_key: apiKey,
+        base_url: baseUrl
+      };
+      
+      fetch('/api/worktogether/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      }).then(function(r) { return r.json(); }).then(function(result) {
+        if (result.status === 'started') {
+          document.getElementById('worktogether-progress').classList.add('active');
+          worktogetherPolling = setInterval(updateWorktogetherProgress, 3000);
+        } else {
+          alert('Error: ' + (result.error || 'Unknown error'));
+        }
+      });
+    }
+    
+    function toggleMaximize() {
+      if (window.innerHeight === screen.height) {
+        window.moveTo(0, 0);
+        window.resizeTo(screen.width - 100, screen.height - 100);
+      } else {
+        window.moveTo(0, 0);
+        window.resizeTo(screen.width, screen.height);
+      }
+    }
+    
+    if (window.minimize) {
+      window.minimize = function() { window.api.minimize(); };
+    }
+    
+    connect();
+  </script>
+</body>
+</html>
