@@ -243,24 +243,7 @@ I am looking for contributors interested in:
 - Review self-update safety
 - Report confusing UX flows
 
-## Before Publishing Your Fork
 
-Do not commit:
-
-- `.venv312/`
-- `data/`
-- `build/`
-- `dist/`
-- `.macagent/`
-- app bundles
-- personal provider settings
-- API keys or tokens
-
-Run a secret scan before pushing:
-
-```bash
-rg -n --hidden -i "sk-|sk-proj-|hf_|api[_-]?key|bearer|token|secret|password|client_secret|private_key" .
-```
 
 ## Disclaimer
 
