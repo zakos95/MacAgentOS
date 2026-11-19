@@ -41,4 +41,4 @@ Les instructions de fabrication figurent dans [Déploiement](NativeMacApp/DEPLOY
 
 ## Licence
 
-La licence du projet reste à définir par son auteur.
+Le code du projet est publié sous [licence MIT](LICENSE).

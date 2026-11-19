@@ -27,4 +27,4 @@ Les fonctions annoncées comme compatibles avec Claude doivent être vérifiées
 
 Utilisez le modèle d’issue et fournissez les étapes de reproduction, le résultat obtenu, le résultat attendu et les logs expurgés. Pour un défaut de sécurité, évitez de publier des secrets ou des données privées dans une issue publique. Contactez le mainteneur directement par son profil GitHub pour une divulgation privée.
 
-Le dépôt n’a pas encore de licence de redistribution. Le mainteneur doit fixer la licence avant de clarifier les droits de réutilisation et de distribution des contributions.
+Les contributions au code sont publiées sous la [licence MIT](LICENSE) du projet.
