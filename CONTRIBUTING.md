@@ -1,12 +1,14 @@
-# Contribuer à MacAgent OS
+# Contributing to MacAgent OS
 
-Merci de contribuer à la bêta. Commencez par une [issue](https://github.com/zakos95/MacAgentOS/issues) décrivant le problème ou la fonction. Les issues portant le label `good first issue` ont un périmètre réduit. Indiquez dans l’issue que vous travaillez dessus pour éviter les doublons.
+[English](CONTRIBUTING.md) · [Français](CONTRIBUTING.fr.md) · [Русский](CONTRIBUTING.ru.md) · [简体中文](CONTRIBUTING.zh-CN.md)
 
-Le projet associe une application SwiftUI dans `NativeMacApp/` à un serveur Python FastAPI. Les intégrations MCP se trouvent dans `mcp_hub.py`, les skills Markdown dans `claude_skills.py` et l’exécution des équipes dans `team_runtime.py`. La documentation des fonctions et des limites figure dans [README](README.md), [MCP](docs/MCP.md) et [Skills et équipes](docs/SKILLS-AND-TEAMS.md).
+Thanks for helping with the beta. Choose an [open issue](https://github.com/zakos95/MacAgentOS/issues) and comment there before starting to avoid duplicate work. Issues marked [`good first issue`](https://github.com/zakos95/MacAgentOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) have a smaller scope.
 
-## Lancer les tests
+The native SwiftUI app lives in `NativeMacApp/`; the FastAPI backend is in `server.py`. MCP integration is in `mcp_hub.py`, Markdown skills in `claude_skills.py`, and agent teams in `team_runtime.py`. See the [README](README.md), [MCP guide](docs/MCP.md) and [skills and teams guide](docs/SKILLS-AND-TEAMS.md).
 
-Python 3.12 et Swift 6 sont nécessaires pour le développement. Depuis la racine du dépôt :
+## Run the checks
+
+Use Python 3.12 and Swift 6 from the repository root.
 
 ```sh
 python3.12 -m venv .venv312
@@ -15,16 +17,12 @@ MACAGENT_APP_SUPPORT_DIR=/tmp/macagent-contributor .venv312/bin/python -m unitte
 swift test --package-path NativeMacApp
 ```
 
-Le serveur se lance avec `.venv312/bin/python server.py`. Ollama est facultatif pour les tests automatisés. Pour un essai réel, installez un modèle local et sélectionnez-le dans l’application. Les clés de fournisseurs cloud appartiennent à l’utilisateur et ne doivent jamais être ajoutées au dépôt ou aux issues.
+Run the backend with `.venv312/bin/python server.py`. Ollama is optional for the automated tests. Real model checks require a locally installed model. Keep cloud API keys and private files out of commits, issues and screenshots.
 
-## Proposer une modification
+## Open a pull request
 
-Créez une branche depuis `main`, limitez la modification à une issue et ouvrez une pull request avec un exemple de comportement et les vérifications effectuées. Ajoutez un test lorsqu’il protège un comportement susceptible de régresser. Pour une modification d’interface, joignez une capture. Signalez le modèle, la version de macOS et le type de Mac utilisés pour les essais réels.
+Create a branch from `main`, keep the change focused on one issue, and describe a concrete before/after example. Include checks you ran. Add a regression test when it protects behavior likely to break again. For interface changes, attach a screenshot. For real tests, state the macOS version, Mac architecture and model.
 
-Les fonctions annoncées comme compatibles avec Claude doivent être vérifiées contre la documentation actuelle de Claude et du protocole MCP. Décrivez précisément le format pris en charge et les cas non couverts.
+Claims of compatibility with Claude should cite current Claude or MCP documentation and state the exact formats supported and any limits. Report security defects privately through the maintainer's GitHub profile, without exposing secrets in a public issue.
 
-## Signaler un bug
-
-Utilisez le modèle d’issue et fournissez les étapes de reproduction, le résultat obtenu, le résultat attendu et les logs expurgés. Pour un défaut de sécurité, évitez de publier des secrets ou des données privées dans une issue publique. Contactez le mainteneur directement par son profil GitHub pour une divulgation privée.
-
-Les contributions au code sont publiées sous la [licence MIT](LICENSE) du projet.
+Code contributions are published under the project's [MIT license](LICENSE).
