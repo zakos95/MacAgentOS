@@ -20,7 +20,7 @@ La compatibilité avec tous les skills et connecteurs Claude reste un objectif. 
 
 Aucun benchmark comparatif ne démontre une supériorité sur Claude. La qualité dépend du modèle choisi. Cette publication permet de recueillir des retours et d’étendre la couverture des tests.
 
-Signalez les problèmes avec la version du système, le modèle et les étapes de reproduction dans les [issues](https://github.com/zakos95/MacAgentOS/issues).
+Développeurs et testeurs, consultez le [guide de contribution](CONTRIBUTING.md), choisissez une [issue pour commencer](https://github.com/zakos95/MacAgentOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) ou ouvrez une [discussion](https://github.com/zakos95/MacAgentOS/discussions). Signalez les problèmes avec la version du système, le modèle et les étapes de reproduction dans les [issues](https://github.com/zakos95/MacAgentOS/issues).
 
 ## Développement
 
