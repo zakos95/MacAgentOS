@@ -1,28 +1,32 @@
-# MacAgent OS — bêta publique 1.1.0-beta.1
+# MacAgent OS — public beta 1.1.0-beta.1
 
-Téléchargez le DMG Apple Silicon dans les [versions GitHub](https://github.com/zakos95/MacAgentOS/releases/tag/v1.1.0-beta.1). Ouvrez le DMG puis copiez Mac Agent OS dans Applications. Le backend Python est embarqué. Choisissez un fournisseur dans les réglages. Ollama nécessite son installation et un modèle local. Les fournisseurs distants nécessitent votre propre accès.
+[English](README.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [简体中文](README.zh-CN.md)
 
-La signature est ad hoc. Cette bêta n’est pas notariée par Apple. Gatekeeper peut demander une autorisation dans Réglages Système → Confidentialité et sécurité. Le paquet cible macOS 14+, avec validation sur Apple Silicon sous macOS 27.2.1. Intel et les autres versions de macOS restent à valider.
+MacAgent OS is a macOS AI assistant built with SwiftUI and a local FastAPI backend. Download the [Apple Silicon beta](https://github.com/zakos95/MacAgentOS/releases/tag/v1.1.0-beta.1), open the DMG, and copy Mac Agent OS into Applications. Select an AI provider in settings. Ollama requires a locally installed model. Cloud providers require your own credentials.
 
-## Fonctions vérifiées
+The app has an ad hoc signature and has not been notarized by Apple. Gatekeeper may require approval in System Settings → Privacy & Security. The declared minimum is macOS 14. Testing so far covers Apple Silicon on macOS 27.2.1. Intel Macs and other macOS versions need validation.
 
-- Chat local avec Ollama et historique persistant.
-- Import explicite de configurations MCP Claude Desktop ou projet. Transports stdio, HTTP et SSE, outils, ressources et prompts. [Guide MCP](docs/MCP.md).
-- Skills Markdown personnels et de projet, invocation manuelle, arguments et références texte. [Skills et équipes](docs/SKILLS-AND-TEAMS.md).
-- Équipes de plusieurs agents texte avec contextes indépendants et synthèse.
-- Authentification du backend et du chat Web, données stockées dans Application Support.
+## Tested features
 
-Les tests automatisés couvrent 55 scénarios Python et 2 scénarios Swift. Des essais avec qwen3:8b ont validé le chat, un skill utilisant son fichier de référence et une équipe de deux agents. Les serveurs MCP de test exécutent de vraies connexions stdio, HTTP et SSE.
+- Local Ollama chat with persistent conversation history.
+- Explicit import of Claude Desktop or project MCP configurations, with stdio, HTTP and SSE transports and support for tools, resources and prompts. See the [MCP guide](docs/MCP.md).
+- Personal and project Markdown skills with manual invocation, arguments and linked text references. See [Skills and teams](docs/SKILLS-AND-TEAMS.md).
+- Teams of text agents with independent contexts and a combined answer.
+- Backend and web chat authentication, with user data stored in macOS Application Support.
 
-## Limites de cette bêta
+The local suite passed 55 Python and 2 Swift tests. Real tests with qwen3:8b covered chat, a skill that read its reference file, and a two-agent team. MCP tests connected to real local stdio, HTTP and SSE servers.
 
-La compatibilité avec tous les skills et connecteurs Claude reste un objectif. Les hooks, l’exécution shell des skills, les plugins hébergés, les agents disposant d’outils et l’authentification OAuth MCP intégrée restent à développer. Les équipes actuelles produisent du texte. Les fournisseurs cloud et les permissions macOS demandent des essais avec les comptes et autorisations des testeurs.
+## Help build it
 
-Aucun benchmark comparatif ne démontre une supériorité sur Claude. La qualité dépend du modèle choisi. Cette publication permet de recueillir des retours et d’étendre la couverture des tests.
+We welcome macOS, Swift, Python, MCP and agent developers. Read [CONTRIBUTING.md](CONTRIBUTING.md), pick a [good first issue](https://github.com/zakos95/MacAgentOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22), or join the [launch discussion](https://github.com/zakos95/MacAgentOS/discussions/5). Report bugs with your macOS version, Mac architecture, model and reproduction steps.
 
-Développeurs et testeurs, consultez le [guide de contribution](CONTRIBUTING.md), choisissez une [issue pour commencer](https://github.com/zakos95/MacAgentOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) ou ouvrez une [discussion](https://github.com/zakos95/MacAgentOS/discussions). Signalez les problèmes avec la version du système, le modèle et les étapes de reproduction dans les [issues](https://github.com/zakos95/MacAgentOS/issues).
+Current work includes [testing on more Macs](https://github.com/zakos95/MacAgentOS/issues/1), [GitHub Actions](https://github.com/zakos95/MacAgentOS/issues/2), [MCP OAuth](https://github.com/zakos95/MacAgentOS/issues/3) and [supervised tools for agent teams](https://github.com/zakos95/MacAgentOS/issues/4).
 
-## Développement
+## Beta limits
+
+Full compatibility with every Claude skill and connector is a goal. Skill hooks and shell execution, hosted plugins, agents with tools and built-in MCP OAuth remain to be developed. Current teams produce text. Cloud providers and macOS permissions still need testing with contributors' own accounts and machines. No comparative benchmark establishes superiority over Claude. Output quality depends on the chosen model.
+
+## Development
 
 ```sh
 python3.12 -m venv .venv312
@@ -30,15 +34,15 @@ python3.12 -m venv .venv312
 .venv312/bin/python server.py
 ```
 
-Le backend écoute sur 127.0.0.1:8000. Le chat Web demande le jeton local du fichier `~/Library/Application Support/MacAgentOS/data/api_key.txt`. Pour isoler les données des tests, définissez `MACAGENT_APP_SUPPORT_DIR`.
+The backend listens on 127.0.0.1:8000. Web chat requests the local token from `~/Library/Application Support/MacAgentOS/data/api_key.txt`. Set `MACAGENT_APP_SUPPORT_DIR` to isolate test data.
 
 ```sh
 MACAGENT_APP_SUPPORT_DIR=/tmp/macagent-tests .venv312/bin/python -m unittest discover -s tests
 swift test --package-path NativeMacApp
 ```
 
-Les instructions de fabrication figurent dans [Déploiement](NativeMacApp/DEPLOYMENT.md).
+See [deployment instructions](NativeMacApp/DEPLOYMENT.md) for building the app.
 
-## Licence
+## License
 
-Le code du projet est publié sous [licence MIT](LICENSE).
+[MIT](LICENSE).
