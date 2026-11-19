@@ -6,6 +6,7 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
+from paths import storage_dir as default_storage_dir, write_private_json
 from typing import List, Optional, Dict, Any
 
 
@@ -77,7 +78,7 @@ class Session:
 class SessionManager:
     def __init__(self, storage_dir: str = None):
         if storage_dir is None:
-            storage_dir = Path(__file__).parent / "data" / "sessions"
+            storage_dir = default_storage_dir("sessions")
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.sessions: Dict[str, Session] = {}
@@ -103,8 +104,7 @@ class SessionManager:
             "current": self.current_session_id,
             "sessions": [s.to_dict() for s in self.sessions.values()]
         }
-        with open(index_file, "w") as f:
-            json.dump(data, f, indent=2)
+        write_private_json(index_file, data)
     
     def create(self, name: Optional[str] = None) -> Session:
         session = Session(name=name)
@@ -115,8 +115,7 @@ class SessionManager:
         return session
     
     def _save_session(self, session: Session):
-        with open(self._session_file(session.id), "w") as f:
-            json.dump(session.to_dict(), f, indent=2)
+        write_private_json(self._session_file(session.id), session.to_dict())
     
     def load(self, session_id: str) -> Optional[Session]:
         session_file = self._session_file(session_id)

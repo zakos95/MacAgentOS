@@ -1,276 +1,44 @@
-<div align="center">
+# MacAgent OS — bêta publique 1.1.0-beta.1
 
-# Mac Agent OS
+Téléchargez le DMG Apple Silicon dans les [versions GitHub](https://github.com/zakos95/MacAgentOS/releases/tag/v1.1.0-beta.1). Ouvrez le DMG puis copiez Mac Agent OS dans Applications. Le backend Python est embarqué. Choisissez un fournisseur dans les réglages. Ollama nécessite son installation et un modèle local. Les fournisseurs distants nécessitent votre propre accès.
 
-### A native macOS AI agent experiment
+La signature est ad hoc. Cette bêta n’est pas notariée par Apple. Gatekeeper peut demander une autorisation dans Réglages Système → Confidentialité et sécurité. Le paquet cible macOS 14+, avec validation sur Apple Silicon sous macOS 27.2.1. Intel et les autres versions de macOS restent à valider.
 
-#### SwiftUI • FastAPI • Ollama • ChatGPT/Codex Bridge • MCP Tools • Skills • Self-Update Lab
+## Fonctions vérifiées
 
-![macOS](https://img.shields.io/badge/macOS-SwiftUI-black?style=for-the-badge&logo=apple)
-![Python](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi)
-![Ollama](https://img.shields.io/badge/Local%20AI-Ollama-4A90E2?style=for-the-badge)
-![MCP](https://img.shields.io/badge/Tools-MCP-6E56CF?style=for-the-badge)
-![Community](https://img.shields.io/badge/Community-Help%20Wanted-orange?style=for-the-badge)
+- Chat local avec Ollama et historique persistant.
+- Import explicite de configurations MCP Claude Desktop ou projet. Transports stdio, HTTP et SSE, outils, ressources et prompts. [Guide MCP](docs/MCP.md).
+- Skills Markdown personnels et de projet, invocation manuelle, arguments et références texte. [Skills et équipes](docs/SKILLS-AND-TEAMS.md).
+- Équipes de plusieurs agents texte avec contextes indépendants et synthèse.
+- Authentification du backend et du chat Web, données stockées dans Application Support.
 
-**An open experiment to build a powerful, free, community-driven desktop AI agent for macOS.**
+Les tests automatisés couvrent 55 scénarios Python et 2 scénarios Swift. Des essais avec qwen3:8b ont validé le chat, un skill utilisant son fichier de référence et une équipe de deux agents. Les serveurs MCP de test exécutent de vraies connexions stdio, HTTP et SSE.
 
-</div>
+## Limites de cette bêta
 
----
+La compatibilité avec tous les skills et connecteurs Claude reste un objectif. Les hooks, l’exécution shell des skills, les plugins hébergés, les agents disposant d’outils et l’authentification OAuth MCP intégrée restent à développer. Les équipes actuelles produisent du texte. Les fournisseurs cloud et les permissions macOS demandent des essais avec les comptes et autorisations des testeurs.
 
-## The Idea
+Aucun benchmark comparatif ne démontre une supériorité sur Claude. La qualité dépend du modèle choisi. Cette publication permet de recueillir des retours et d’étendre la couverture des tests.
 
-Mac Agent OS is an experimental desktop AI assistant for macOS.
+Signalez les problèmes avec la version du système, le modèle et les étapes de reproduction dans les [issues](https://github.com/zakos95/MacAgentOS/issues).
 
-The goal is to move beyond a simple chatbot and build an agent that can understand the user’s Mac, use local tools, connect to different AI providers, work with local models, diagnose problems, and eventually help improve itself through a supervised self-update workflow.
+## Développement
 
-This project is early, but the direction is ambitious:
-
-> A local-first macOS AI agent that is useful, extensible, transparent, and shaped by the community.
-
----
-
-## Why This Project Exists
-
-Most AI assistants are either cloud-only, expensive, closed, or limited to conversation.
-
-Mac Agent OS explores another path:
-
-- a native macOS app
-- local models through Ollama
-- optional cloud providers
-- desktop actions through tools
-- skills that can extend behavior
-- diagnostics that explain what is working
-- a self-update lab for supervised evolution
-
-The dream is to create a desktop AI environment that users and developers can actually shape.
-
----
-
-## What It Can Do Today
-
-| Capability | Status |
-|---|---|
-| Native macOS SwiftUI app | Working |
-| Local FastAPI backend | Working |
-| Bundled backend inside `.app` | Working |
-| Ollama local model detection | Working |
-| ChatGPT / Codex Bridge | Experimental |
-| Provider configuration UI | Experimental |
-| MCP / local tools | Experimental |
-| Safari and macOS actions | Partial |
-| Skills system | Early |
-| Diagnostics and logs | Working |
-| Self Update Lab | Early |
-| French / English interface | Started |
-
----
-
-## Core Features
-
-- **Native macOS interface** built with SwiftUI
-- **Local backend** powered by FastAPI
-- **Ollama support** for local models
-- **ChatGPT / Codex Bridge** provider mode
-- **OpenAI-compatible provider architecture**
-- **Hugging Face, Anthropic, Gemini support structure**
-- **MCP-style tools** for local actions
-- **Safari and macOS control experiments**
-- **Skills system** inspired by modular agent capabilities
-- **Diagnostics page** for backend, providers, tools, and models
-- **Logs page** for troubleshooting
-- **Self Update Lab** for safe candidate builds
-- **French and English UI option**
-
----
-
-## Architecture
-
-```mermaid
-flowchart LR
-    User["User"] --> App["SwiftUI macOS App"]
-    App --> Backend["FastAPI Backend"]
-    Backend --> Providers["AI Providers"]
-    Backend --> Ollama["Ollama / Local Models"]
-    Backend --> Skills["Skills"]
-    Backend --> Tools["MCP / macOS Tools"]
-    Tools --> Safari["Safari"]
-    Tools --> Mac["macOS Actions"]
-    Backend --> Diagnostics["Diagnostics"]
-    Diagnostics --> SelfUpdate["Self Update Lab"]
-    SelfUpdate --> Candidate["Candidate App Build"]
-```
-
----
-
-## AI Providers
-
-Mac Agent OS is designed to be provider-flexible.
-
-Current or planned provider modes:
-
-- Ollama / local models
-- ChatGPT / Codex Bridge
-- OpenAI API
-- Hugging Face router
-- Anthropic
-- Gemini
-- Custom OpenAI-compatible endpoints
-
-The goal is not to lock the project to one AI company. Local models should stay important, and cloud providers should remain optional.
-
----
-
-## Skills
-
-Skills are modular capability packs that can guide the agent and expose tools in a controlled way.
-
-Initial skill directions:
-
-- Mac Control
-- Safari Assistant
-- Local Models
-- Provider Doctor
-- Code Helper
-- Self Update Lab
-
-The long-term goal is a community skill ecosystem for desktop workflows.
-
----
-
-## Self Update Lab
-
-Mac Agent OS includes an early self-update experiment.
-
-The current workflow is supervised:
-
-1. keep a safe copy
-2. keep a working copy
-3. run diagnostics
-4. ask an AI provider for an update proposal
-5. build a candidate app
-6. let the user decide what to promote
-
-This is the beginning of an auto-evolution system, not the final form. The focus is to make it understandable, testable, and safe enough to improve over time.
-
----
-
-## Roadmap
-
-Ideas currently worth exploring:
-
-- stronger local action routing
-- better local model prompts
-- deeper Ollama workflows
-- safer autonomous coding loops
-- more reliable MCP tools
-- plugin and skill marketplace ideas
-- better app packaging
-- Apple notarization
-- more languages
-- screenshots and demo video
-- stronger QA release flow
-- community-created skills
-
----
-
-## Community Help Wanted
-
-This project needs help.
-
-If you are interested in any of these areas, contributions are welcome:
-
-- SwiftUI and macOS app development
-- Python / FastAPI backend work
-- local AI models and Ollama
-- MCP tools
-- provider integrations
-- autonomous agent workflows
-- UI and product design
-- permissions and trust design
-- packaging and distribution
-- documentation
-- testing on different Macs
-
-You can help by opening issues, testing the app, improving docs, proposing architecture, creating skills, or submitting pull requests.
-
----
-
-## Quick Start
-
-Create the Python environment:
-
-```bash
+```sh
 python3.12 -m venv .venv312
-source .venv312/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-Run the backend:
-
-```bash
+.venv312/bin/python -m pip install -r requirements.txt
 .venv312/bin/python server.py
 ```
 
-Build the macOS app:
+Le backend écoute sur 127.0.0.1:8000. Le chat Web demande le jeton local du fichier `~/Library/Application Support/MacAgentOS/data/api_key.txt`. Pour isoler les données des tests, définissez `MACAGENT_APP_SUPPORT_DIR`.
 
-```bash
-CLANG_MODULE_CACHE_PATH=/private/tmp/macagent-clang-cache swift build --package-path "NativeMacApp"
+```sh
+MACAGENT_APP_SUPPORT_DIR=/tmp/macagent-tests .venv312/bin/python -m unittest discover -s tests
+swift test --package-path NativeMacApp
 ```
 
-Run tests:
+Les instructions de fabrication figurent dans [Déploiement](NativeMacApp/DEPLOYMENT.md).
 
-```bash
-PYTHONPYCACHEPREFIX=/private/tmp/macagent-pycache .venv312/bin/python -m unittest discover -s tests
-CLANG_MODULE_CACHE_PATH=/private/tmp/macagent-clang-cache swift build --package-path "NativeMacApp"
-```
+## Licence
 
----
-
-## Build the Bundled App
-
-Build the backend binary:
-
-```bash
-.venv312/bin/python -m pip install pyinstaller
-.venv312/bin/pyinstaller --clean server.spec
-```
-
-Build the app bundle:
-
-```bash
-cd NativeMacApp
-ENVIRONMENT=prod \
-SIGN_IDENTITY='' \
-CLANG_MODULE_CACHE_PATH=/private/tmp/macagent-clang-cache \
-BACKEND_BINARY="../dist/MacAgentServer" \
-zsh script/build_and_bundle.sh
-```
-
-The generated app is written under:
-
-```text
-/tmp/MacAgentOS-build/prod/
-```
-
----
-
-## Project Keywords
-
-`macOS AI agent`, `desktop AI agent`, `SwiftUI AI app`, `FastAPI AI backend`, `Ollama desktop assistant`, `local AI assistant`, `MCP tools`, `AI automation`, `ChatGPT bridge`, `Codex bridge`, `self-update lab`, `local-first AI`, `macOS automation`, `AI coding agent`.
-
----
-
-## License
-
-License to be defined.
-
----
-
-<div align="center">
-
-### Help build an open, local-first AI agent for macOS.
-
-</div>
+La licence du projet reste à définir par son auteur.

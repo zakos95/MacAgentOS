@@ -6,6 +6,7 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
+from paths import storage_dir as default_storage_dir
 from typing import List, Optional, Dict, Any
 import sessions
 
@@ -71,7 +72,7 @@ class Template:
 class TemplatesManager:
     def __init__(self, storage_dir: str = None):
         if storage_dir is None:
-            storage_dir = Path(__file__).parent / "data" / "templates"
+            storage_dir = default_storage_dir("templates")
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.templates: Dict[str, Template] = {}

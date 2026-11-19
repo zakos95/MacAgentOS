@@ -70,7 +70,10 @@ class OllamaProvider(LLMProvider):
         payload = {"model": self.model, "messages": messages, "stream": False}
         try:
             resp = requests.post(url, json=payload, timeout=120)
-            return {"type": "text", "content": resp.json()["message"]["content"]}
+            data = resp.json()
+            if not resp.ok or data.get("error"):
+                return {"type": "error", "content": str(data.get("error") or f"Ollama HTTP {resp.status_code}")}
+            return {"type": "text", "content": data["message"]["content"]}
         except requests.exceptions.Timeout:
             return {"type": "error", "content": "Ollama met trop de temps à répondre. Vérifie le modèle local puis réessaie."}
         except requests.exceptions.ConnectionError:
@@ -130,7 +133,9 @@ class OpenAIProvider(LLMProvider):
         requires_api_key: bool = True,
         provider_label: str = "OpenAI",
     ):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.api_key = api_key
+        if not api_key and provider_label == "OpenAI" and urlparse(base_url).hostname == "api.openai.com":
+            self.api_key = os.getenv("OPENAI_API_KEY")
         if _looks_like_oauth_token(self.api_key):
             self.api_key = ""
         self.model = model
@@ -285,36 +290,34 @@ class AnthropicProvider(LLMProvider):
         if system:
             payload["system"] = [{"type": "text", "text": system}]
         
+        if not self.api_key:
+            return {"type": "error", "content": "Ajoute une clé API Anthropic."}
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=120)
             data = resp.json()
-            if data.get("content"):
-                return {"type": "text", "content": data["content"][0]["text"]}
-            return {"type": "text", "content": ""}
-        except Exception as e:
-            return {"type": "error", "content": str(e)}
-    
+            text = "".join(part["text"] for part in data.get("content", []) if part.get("type") == "text")
+            if resp.ok and text:
+                return {"type": "text", "content": text}
+            return {"type": "error", "content": _extract_openai_style_error(data) or f"Anthropic HTTP {resp.status_code} — réponse sans texte."}
+        except requests.RequestException as exc:
+            return {"type": "error", "content": _friendly_request_error("Anthropic", exc)}
+
     def get_models(self, api_key: str = "") -> List[str]:
-        """Return known Claude models - Anthropic doesn't have a list models endpoint"""
         key = api_key or self.api_key
-        # Show all known Claude models
-        return [
-            # Claude 4
-            "claude-opus-4-20250514", "claude-sonnet-4-20250514", "claude-sonnet-4-20250501",
-            "claude-4-sonnet-20250514", "claude-4-opus-20250514", "claude-4-haiku-20250514",
-            # Claude 3.5
-            "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-20240620",
-            "claude-3-5-haiku-20240307",
-            # Claude 3
-            "claude-3-opus-20240229", "claude-3-sonnet-20240229",
-            "claude-3-haiku-20240307",
-            # Claude 2
-            "claude-2.1", "claude-2.0", "claude-2",
-            # Claude 1
-            "claude-1.2", "claude-1.1", "claude-1.0",
-            # Legacy
-            "claude-instant-1.2", "claude-instant-1.1", "claude-instant"
-        ]
+        if not key:
+            raise ValueError("Ajoute une clé API Anthropic.")
+        headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
+        models = []
+        params = {"limit": 100}
+        while True:
+            response = requests.get("https://api.anthropic.com/v1/models", headers=headers, params=params, timeout=10)
+            response.raise_for_status()
+            page = response.json()
+            models.extend(item["id"] for item in page.get("data", []))
+            cursor = page.get("last_id")
+            if not page.get("has_more") or not cursor or cursor == params.get("after_id"):
+                return models
+            params["after_id"] = cursor
 
 
 class GoogleGeminiProvider(LLMProvider):
@@ -324,84 +327,45 @@ class GoogleGeminiProvider(LLMProvider):
         self.model = model
     
     def chat(self, messages: List[Dict], tools: List[Dict] = None, files: List[str] = None) -> Dict:
-        key = self.api_key
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={key}"
-        
-        contents = []
-        for msg in messages:
-            if msg["role"] == "system":
-                continue
-            role = "user" if msg["role"] == "user" else "model"
-            contents.append({"role": role, "parts": [{"text": msg["content"]}]})
-        
+        if not self.api_key:
+            return {"type": "error", "content": "Ajoute une clé API Gemini."}
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        contents = [{"role": "user" if msg["role"] == "user" else "model", "parts": [{"text": msg["content"]}]}
+                    for msg in messages if msg["role"] in {"user", "assistant"}]
         payload = {"contents": contents}
-        
+        instructions = [{"text": msg["content"]} for msg in messages if msg["role"] == "system"]
+        if instructions:
+            payload["systemInstruction"] = {"parts": instructions}
         try:
-            resp = requests.post(url, json=payload, timeout=120)
+            resp = requests.post(url, headers={"x-goog-api-key": self.api_key}, json=payload, timeout=120)
             data = resp.json()
-            if data.get("candidates"):
-                content = data["candidates"][0]["content"]
-                if content.get("parts"):
-                    return {"type": "text", "content": content["parts"][0].get("text", "")}
-            return {"type": "text", "content": ""}
-        except Exception as e:
-            return {"type": "error", "content": str(e)}
-    
+            candidates = data.get("candidates") or [{}]
+            parts = candidates[0].get("content", {}).get("parts", [])
+            text = "".join(part.get("text", "") for part in parts if not part.get("thought"))
+            if resp.ok and text:
+                return {"type": "text", "content": text}
+            return {"type": "error", "content": _extract_openai_style_error(data) or "Gemini n’a renvoyé aucun texte."}
+        except requests.RequestException as exc:
+            return {"type": "error", "content": _friendly_request_error("Gemini", exc)}
+
     def get_models(self, api_key: str = "") -> List[str]:
-        """Fetch REAL models from Google Gemini API"""
         key = api_key or self.api_key
         if not key:
-            return [
-                # Gemini 2.5 (latest)
-                "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro",
-                "gemini-2.5-flash-image", "gemini-2.5-flash-native-audio-latest",
-                "gemini-2.5-computer-use-preview-10-2025",
-                # Gemini 2.0
-                "gemini-2.0-flash", "gemini-2.0-flash-001", "gemini-2.0-flash-lite", "gemini-2.0-flash-lite-001",
-                "gemini-2.0-pro",
-                # Gemini 1.5
-                "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro-vision",
-                # Gemini 1.0
-                "gemini-pro", "gemini-pro-vision", "gemini-ultra",
-                # Gemma
-                "gemma-3-27b-it", "gemma-3-4b-it", "gemma-4-31b-it",
-                # Experimental
-                "gemini-3-flash-preview", "gemini-3-pro-preview",
-                # Vision/Audio/Video
-                "imagen-4.0-generate-001", "veo-3.0-generate-001"
-            ]
-        
-        all_models = set()
-        
-        try:
-            # First try the models endpoint
-            url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
-            resp = requests.get(url, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                for m in data.get("models", []):
-                    model_name = m["name"].replace("models/", "")
-                    all_models.add(model_name)
-            
-            # Also try tuned models endpoint
-            tuned_url = f"https://generativelanguage.googleapis.com/v1beta/tunedModels?key={key}"
-            tuned_resp = requests.get(tuned_url, timeout=10)
-            if tuned_resp.status_code == 200:
-                tuned_data = tuned_resp.json()
-                for m in tuned_data.get("tunedModels", []):
-                    model_name = m["name"].replace("tunedModels/", "")
-                    all_models.add(model_name)
-                    
-        except Exception as e:
-            print(f"Error fetching Gemini models: {e}")
-        
-        if all_models:
-            return sorted(all_models)
-        
-        return [
-            "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash",
-            "gemini-1.5-pro", "gemini-1.5-flash"
-        ]
+            raise ValueError("Ajoute une clé API Gemini.")
+        models = []
+        params = {"pageSize": 100}
+        while True:
+            response = requests.get("https://generativelanguage.googleapis.com/v1beta/models",
+                                    headers={"x-goog-api-key": key}, params=params, timeout=10)
+            response.raise_for_status()
+            page = response.json()
+            for item in page.get("models", []):
+                if "generateContent" in item.get("supportedGenerationMethods", []):
+                    models.append(item["name"].removeprefix("models/"))
+            cursor = page.get("nextPageToken")
+            if not cursor or cursor == params.get("pageToken"):
+                return models
+            params["pageToken"] = cursor
 
 
 class MistralProvider(LLMProvider):
@@ -637,7 +601,7 @@ def get_provider(provider: str, api_key: str = "", model: str = "", **kwargs) ->
 
     if provider in ["openai", "openai_compatible", "lmstudio", "ollama", "groq", "mistral"]:
         base_url = kwargs.get("base_url", "")
-        if base_url:
+        if base_url and provider not in {"groq", "mistral"}:
             config["base_url"] = base_url
 
     if provider == "azure":

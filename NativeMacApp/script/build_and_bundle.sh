@@ -32,9 +32,6 @@ if [[ -z "${DEVELOPER_DIR:-}" ]]; then
 fi
 CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/tmp/clang-module-cache}"
 SWIFT_BUILD_CONFIGURATION="${SWIFT_BUILD_CONFIGURATION:-release}"
-BUILD_DIR="$ROOT_DIR/.build/arm64-apple-macosx/$SWIFT_BUILD_CONFIGURATION"
-EXECUTABLE_PATH="$BUILD_DIR/$PRODUCT_NAME"
-MODULE_CACHE_DIR="$BUILD_DIR/ModuleCache"
 
 if [[ ! -f "$CONFIG_SOURCE" ]]; then
   echo "Missing config profile: $CONFIG_SOURCE" >&2
@@ -46,13 +43,11 @@ mkdir -p "$DIST_ROOT" "$BUILD_ROOT" "$CLANG_MODULE_CACHE_PATH"
 export DEVELOPER_DIR
 export CLANG_MODULE_CACHE_PATH
 
-# Copied worktrees can keep a stale Swift module cache tied to another absolute path.
-# Purge only this local cache so the package can rebuild cleanly from MacAgentOS.
-rm -rf "$MODULE_CACHE_DIR"
 
 cd "$ROOT_DIR"
 echo "Building for production..." >&2
 swift build -c "$SWIFT_BUILD_CONFIGURATION" >&2
+EXECUTABLE_PATH="$(swift build -c "$SWIFT_BUILD_CONFIGURATION" --show-bin-path)/$PRODUCT_NAME"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
@@ -66,11 +61,14 @@ cp "$CONFIG_SOURCE" "$CONFIG_DEST"
 #   .venv312/bin/pyinstaller server.spec
 # Example:
 #   BACKEND_BINARY="$PROJECT_ROOT/dist/MacAgentServer" ./build_and_bundle.sh
-BACKEND_BINARY="${BACKEND_BINARY:-}"
+BACKEND_BINARY="${BACKEND_BINARY:-$ROOT_DIR/../dist/MacAgentServer}"
 if [[ -n "$BACKEND_BINARY" && -f "$BACKEND_BINARY" ]]; then
   cp "$BACKEND_BINARY" "$RESOURCES_DIR/MacAgentServer"
   chmod +x "$RESOURCES_DIR/MacAgentServer"
   echo "✅ Backend binary bundled: $BACKEND_BINARY" >&2
+elif [[ "$ENVIRONMENT" == "prod" ]]; then
+  echo "Production builds require a backend. Build server.spec first or set BACKEND_BINARY." >&2
+  exit 1
 else
   echo "ℹ️  No BACKEND_BINARY set — backend must be started externally (dev mode)" >&2
 fi
@@ -142,6 +140,8 @@ cat > "$PLIST_PATH" <<PLIST
   <string>14.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Mac Agent OS uses Apple events for the Mac actions you approve.</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
 </dict>

@@ -6,6 +6,7 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
+from paths import storage_dir as default_storage_dir
 from typing import List, Optional, Dict, Any, Callable
 from enum import Enum
 from dataclasses import dataclass, field
@@ -74,7 +75,7 @@ class ApprovalRule:
 class PermissionManager:
     def __init__(self, storage_dir: str = None):
         if storage_dir is None:
-            storage_dir = Path(__file__).parent / "data" / "permissions"
+            storage_dir = default_storage_dir("permissions")
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         

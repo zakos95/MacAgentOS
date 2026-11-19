@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+  <link rel="icon" href="data:,">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Super Power Ai</title>
+  <title>MacAgent OS</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     
@@ -1180,7 +1181,7 @@
   </style>
 </head>
 <body>
-  <div class="window-dragbar">Super Power Ai</div>
+  <div class="window-dragbar">MacAgent OS</div>
 
   
   <div class="app">
@@ -1188,7 +1189,7 @@
     <div class="sidebar">
       <div class="sidebar-header">
         <div class="logo"></div>
-        <span class="logo-text">Super Power Ai</span>
+        <span class="logo-text">MacAgent OS</span>
       </div>
       
       <button class="new-chat-btn" onclick="newChat()">
@@ -1217,7 +1218,7 @@
     <div class="main">
       <div class="chat-container" id="chat-container">
         <div class="empty">
-          <h1>Super Power Ai</h1>
+          <h1>MacAgent OS</h1>
           <p>Your AI assistant for macOS</p>
           <p style="margin-top: 16px; font-size: 13px;">Type a message to start</p>
         </div>
@@ -1225,56 +1226,17 @@
       
       <div class="input-container">
         <div class="input-wrapper">
-          <textarea id="message-input" placeholder="Message Super Power Ai..." rows="1"></textarea>
-          
+          <textarea id="message-input" placeholder="Message MacAgent OS..." rows="1"></textarea>
+
           <!-- Model Switcher - always visible -->
           <div class="model-switcher">
             <select id="quick-model-select" onchange="switchModel(this.value)">
               <option value="">🤖 Model</option>
             </select>
-            <button class="settings-btn" onclick="showModelPanel()" title="Config">⚙️</button>
+            <button class="settings-btn" onclick="showSettings()" title="Config">⚙️</button>
           </div>
-          
+
           <button class="send-btn" id="send-btn" onclick="sendMessage()">Send</button>
-        </div>
-      </div>
-      
-      <!-- Simple Model Configuration Panel (Slide from right) -->
-      <div id="model-panel" class="model-panel">
-        <div class="model-panel-header">
-          <h3>Configuration</h3>
-          <button onclick="hideModelPanel()" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;">✕</button>
-        </div>
-        
-        <div class="model-panel-content">
-          <div class="config-section">
-            <label>Provider</label>
-            <select id="panel-provider" onchange="loadPanelModels()">
-              <option value="ollama">🤖 Ollama</option>
-              <option value="lmstudio">💻 LM Studio</option>
-              <option value="openai">🔑 OpenAI</option>
-              <option value="anthropic">🔑 Anthropic</option>
-              <option value="gemini">🔑 Google Gemini</option>
-              <option value="mistral">🔑 Mistral</option>
-              <option value="groq">🔑 Groq</option>
-              <option value="cohere">🔑 Cohere</option>
-              <option value="huggingface">🔑 HuggingFace</option>
-            </select>
-          </div>
-          
-          <div class="config-section">
-            <label>API Key</label>
-            <input type="password" id="panel-api-key" placeholder="Paste your API key..." onchange="loadPanelModels()">
-          </div>
-          
-          <div class="config-section">
-            <label>Model</label>
-            <select id="panel-model" onchange="selectPanelModel()">
-              <option value="">Select model</option>
-            </select>
-          </div>
-          
-          <button class="save-config-btn" onclick="savePanelConfig()">Save & Use</button>
         </div>
       </div>
       
@@ -1295,7 +1257,7 @@
             <div class="settings-icon">⚙️</div>
             <div class="settings-title">
               <h2>Settings</h2>
-              <p>Configure the active provider, model selection and account access used by Super Power Ai without changing the rest of the app.</p>
+              <p>Configure the active provider, model selection and account access used by MacAgent OS without changing the rest of the app.</p>
             </div>
           </div>
           <button class="settings-close" onclick="closeSettings()" aria-label="Close settings">✕</button>
@@ -1444,7 +1406,7 @@
     <div class="modal" style="width: 500px;">
       <h2>🤝 Worktogether - Agent System</h2>
       <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 13px;">
-        Autonomous multi-agent system that develops, tests and fixes code automatically.
+        Several agents consider the same goal independently. Read each contribution and the combined answer here.
       </p>
       <div class="form-group">
         <label>What do you want to build?</label>
@@ -1458,21 +1420,20 @@
       </div>
       <div class="form-group">
         <label>Model</label>
-        <select id="worktogether-model">
-          <option value="">Loading...</option>
-        </select>
+        <input id="worktogether-model" list="team-model-options" placeholder="Model ID">
+        <datalist id="team-model-options"></datalist>
       </div>
       <div class="form-group">
         <label>API Key (if needed)</label>
-        <input type="password" id="worktogether-apikey" placeholder="API key for OpenAI/Claude/Gemini">
+        <input type="password" id="worktogether-apikey" onchange="updateWorktogetherModels()" placeholder="API key for OpenAI/Claude/Gemini">
       </div>
       <div class="form-group">
         <label>Base URL (optional, for custom endpoints)</label>
-        <input type="text" id="worktogether-baseurl" placeholder="http://localhost:11434">
+        <input type="text" id="worktogether-baseurl" onchange="updateWorktogetherModels()" placeholder="http://localhost:11434">
       </div>
       <div class="modal-buttons">
-        <button class="modal-btn secondary" onclick="closeWorktogether()">Cancel</button>
-        <button class="modal-btn primary" style="background: var(--accent);" onclick="startWorktogether()">🚀 Start Building</button>
+        <button class="modal-btn secondary" onclick="closeWorktogether()">Close</button>
+        <button class="modal-btn primary" style="background: var(--accent);" onclick="startWorktogether()">Start team</button>
       </div>
       
       <!-- Progress -->
@@ -1489,8 +1450,42 @@
     </div>
   </div>
 
+  <div class="modal-overlay active" id="unlock">
+    <form class="modal" id="unlock-form">
+      <h2>Connect to MacAgent OS</h2>
+      <p>Paste the local access token from this file on your Mac.</p>
+      <p><code>~/Library/Application Support/MacAgentOS/data/api_key.txt</code></p>
+      <div class="form-group"><label for="local-token">Local access token</label>
+        <input id="local-token" type="password" autocomplete="off" required>
+      </div>
+      <p id="unlock-error" role="alert"></p>
+      <button class="modal-btn primary" type="submit">Connect</button>
+    </form>
+  </div>
   <script>
     let ws;
+    let localToken = '';
+    let connected = false;
+    function apiFetch(url, options = {}) {
+      const headers = new Headers(options.headers);
+      headers.set('Authorization', 'Bearer ' + localToken);
+      return window.fetch(url, {...options, headers});
+    }
+    document.getElementById('unlock-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = document.getElementById('local-token');
+      localToken = input.value.trim();
+      try {
+        const result = await apiFetch('/api/settings');
+        if (!result.ok) throw new Error();
+        input.value = '';
+        document.getElementById('unlock').classList.remove('active');
+        connect();
+      } catch {
+        localToken = '';
+        document.getElementById('unlock-error').textContent = 'Connection failed. Check the backend and the local token.';
+      }
+    });
     let sessions = [];
     let currentSession = null;
     let hereticPolling = null;
@@ -1498,43 +1493,51 @@
     
     function initProviders() {
       // Charger les providers dynamiques
-      fetch('/api/worktogether/providers').then(function(r) { return r.json(); }).then(function(d) {
+      apiFetch('/api/worktogether/providers').then(function(r) { return r.json(); }).then(function(d) {
         var select = document.getElementById('worktogether-provider');
         if (select) {
           select.innerHTML = d.providers.map(function(p) {
             var label = p.name;
             if (p.id === 'ollama' || p.id === 'lmstudio') label += ' (Local)';
             else label += ' ☁';
-            return '<option value="' + p.id + '">' + label + '</option>';
+            return '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(label) + '</option>';
           }).join('');
-          
+
           // Trigger model update
-          updateWorktogetherModels();
         }
       });
     }
     
     function connect() {
-      ws = new WebSocket('ws://' + location.host + '/ws');
+      ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
       
-      ws.onopen = function() {
-        document.getElementById('status-dot').classList.add('connected');
-        document.getElementById('status-text').textContent = 'Ready';
-        document.getElementById('send-btn').disabled = false;
-        loadHistory();
-        initProviders(); // Initialize providers
-        loadQuickModels(); // Load models for quick switch
-      };
-      
-      ws.onclose = function() {
+      ws.onopen = () => ws.send(JSON.stringify({token: localToken}));
+      ws.onclose = (event) => {
+        connected = false;
         document.getElementById('status-dot').classList.remove('connected');
         document.getElementById('status-text').textContent = 'Disconnected';
         document.getElementById('send-btn').disabled = true;
-        setTimeout(connect, 3000);
+        if (event.code === 1008) {
+          localToken = '';
+          document.getElementById('unlock-error').textContent = 'Enter the current local token to reconnect.';
+          document.getElementById('unlock').classList.add('active');
+        } else {
+          setTimeout(connect, 3000);
+        }
       };
-      
       ws.onmessage = function(e) {
         var d = JSON.parse(e.data);
+        if (d.event_type === 'ready') {
+          connected = true;
+          document.getElementById('status-dot').classList.add('connected');
+          document.getElementById('status-text').textContent = 'Ready';
+          document.getElementById('send-btn').disabled = false;
+          loadHistory();
+          initProviders();
+          loadQuickModels();
+          return;
+        }
+        if (d.session_id && currentSession && d.session_id !== currentSession) return;
         if (d.event_type === 'typing' || d.type === 'typing') return;
         
         // Remove empty state
@@ -1555,7 +1558,7 @@
     function getCurrentModelLabel() {
       var quick = document.getElementById('quick-model-select');
       if (quick && quick.value) return quick.value;
-      return 'ChatGPT';
+      return 'Assistant';
     }
 
     function createMessageShell(role, text, metaHtml, extraClass) {
@@ -1622,23 +1625,24 @@
       }
 
       if (d.event_type === 'error') {
-        metaHtml = '<span class="message-meta-badge">ChatGPT</span><span>Erreur pendant la réponse</span>';
+        metaHtml = '<span class="message-meta-badge">Assistant</span><span>Erreur pendant la réponse</span>';
         var errorRow = createMessageShell('assistant', d.content || 'Une erreur est survenue.', metaHtml);
         container.appendChild(errorRow);
         lastAssistantMetaEl = errorRow.querySelector('.message-meta');
         return;
       }
 
-      metaHtml = '<span class="message-meta-badge">ChatGPT</span><span>' + getCurrentModelLabel() + ' • Réponse de l’IA</span>';
+      metaHtml = '<span class="message-meta-badge">Assistant</span><span>' + escapeHtml(getCurrentModelLabel()) + ' • Réponse de l’IA</span>';
       var row = createMessageShell('assistant', d.content || '', metaHtml);
       container.appendChild(row);
       lastAssistantMetaEl = row.querySelector('.message-meta');
     }
     
     function loadHistory() {
-      fetch('/api/sessions').then(function(r) { return r.json(); }).then(function(d) {
+      apiFetch('/api/sessions').then(function(r) { return r.json(); }).then(function(d) {
         sessions = d.sessions || [];
         updateSidebar();
+        if (!currentSession && sessions.length) loadSession(sessions[0].id);
       });
     }
     
@@ -1648,14 +1652,17 @@
         list.innerHTML = '<div class="sidebar-item">No conversations</div>';
         return;
       }
-      list.innerHTML = sessions.slice(0, 20).map(function(s) {
-        var name = s.name || s.id.substring(0, 8);
-        return '<div class="sidebar-item" onclick="loadSession(\'' + s.id + '\')">' + name + '</div>';
-      }).join('');
+      list.replaceChildren(...sessions.slice(0, 20).map(s => {
+        const item = document.createElement('button');
+        item.className = 'sidebar-item';
+        item.textContent = s.name || s.id;
+        item.onclick = () => loadSession(s.id);
+        return item;
+      }));
     }
     
     function newChat() {
-      fetch('/api/sessions', {method: 'POST'}).then(function(r) { return r.json(); }).then(function(s) {
+      apiFetch('/api/sessions', {method: 'POST'}).then(function(r) { return r.json(); }).then(function(s) {
         sessions.unshift(s);
         currentSession = s.id;
         updateSidebar();
@@ -1665,14 +1672,22 @@
     
     function loadSession(id) {
       currentSession = id;
-      // For now, just clear and start fresh
-      document.getElementById('chat-container').innerHTML = '<div class="empty"><h1>MacAgent-OS</h1><p>Session: ' + id + '</p></div>';
+      const container = document.getElementById('chat-container');
+      lastAssistantMetaEl = null;
+      container.replaceChildren();
+      apiFetch('/api/sessions/' + encodeURIComponent(id) + '/messages')
+        .then(r => r.json()).then(data => {
+          if (id !== currentSession) return;
+          container.replaceChildren(...(data.messages || []).map(m =>
+            createMessageShell(m.role === 'user' ? 'user' : 'assistant', m.content, '')
+          ));
+        });
     }
     
     function sendMessage() {
       var input = document.getElementById('message-input');
       var text = input.value.trim();
-      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!text || !connected || !ws || ws.readyState !== WebSocket.OPEN) return;
       lastAssistantMetaEl = null;
       
       // Remove empty state
@@ -1688,11 +1703,11 @@
       input.style.height = 'auto';
       document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
       
-      ws.send(text);
+      ws.send(JSON.stringify({message: text, session_id: currentSession}));
     }
 
     function saveSettingsSilently(data) {
-      return fetch('/api/settings', {
+      return apiFetch('/api/settings', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
@@ -1704,25 +1719,13 @@
       var select = document.getElementById('quick-model-select');
       
       // First get settings (to get API key and current model)
-      fetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
+      apiFetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
         var provider = s.provider || 'ollama';
         var currentModel = s.model || '';
         
-        // Build URL with API key if available
-        var apiKey = '';
-        if (s.api_key && s.api_key !== true) {
-          apiKey = s.api_key;
-        }
-        
-        var url = '/api/llm/models/' + provider;
-        if (apiKey && provider !== 'ollama' && provider !== 'lmstudio') {
-          url += '?api_key=' + encodeURIComponent(apiKey);
-        }
-        
-        // Fetch models
-        fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+        modelsRequest(provider, '', s.base_url).then(function(r) { return r.json(); }).then(function(d) {
           var models = d.models || [];
-          
+
           if (models.length === 0) {
             select.innerHTML = '<option value="">No models</option>';
             return;
@@ -1734,15 +1737,15 @@
             saveSettingsSilently({
               provider: provider,
               model: resolvedModel,
-              api_key: apiKey,
+
               base_url: s.base_url || ''
             });
           }
-          
+
           var options = '';
           for (var i = 0; i < models.length; i++) {
             var selected = (models[i] === resolvedModel) ? ' selected' : '';
-            options += '<option value="' + models[i] + '"' + selected + '>' + models[i] + '</option>';
+            options += '<option value="' + escapeHtml(models[i]) + '"' + selected + '>' + escapeHtml(models[i]) + '</option>';
           }
           select.innerHTML = options;
           select.value = resolvedModel;
@@ -1757,15 +1760,15 @@
     function switchModel(modelName) {
       if (!modelName) return;
       
-      fetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
+      apiFetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
         var data = {
           provider: s.provider || 'ollama',
           model: modelName,
-          api_key: s.api_key || '',
+
           base_url: s.base_url || ''
         };
         
-        fetch('/api/settings', {
+        apiFetch('/api/settings', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(data)
@@ -1791,16 +1794,18 @@
     });
     
     // Helper function to load models for a specific provider
+    function modelsRequest(provider, apiKey, baseUrl) {
+      return apiFetch('/api/llm/models/' + encodeURIComponent(provider), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({api_key: apiKey || '', base_url: baseUrl || ''})
+      });
+    }
     function loadModelsForProvider(provider, apiKey) {
       var modelSelect = document.getElementById('settings-model');
       modelSelect.innerHTML = '<option value="">Loading...</option>';
       
-      var url = '/api/llm/models/' + provider;
-      if (apiKey && provider !== 'ollama' && provider !== 'lmstudio') {
-        url += '?api_key=' + encodeURIComponent(apiKey);
-      }
-      
-      fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+      return modelsRequest(provider, apiKey, document.getElementById('settings-base_url').value).then(function(r) { return r.json(); }).then(function(d) {
         var models = d.models || [];
         
         if (models.length === 0) {
@@ -1810,7 +1815,7 @@
         
         var options = '';
         for (var i = 0; i < models.length; i++) {
-          options += '<option value="' + models[i] + '">' + models[i] + '</option>';
+          options += '<option value="' + escapeHtml(models[i]) + '">' + escapeHtml(models[i]) + '</option>';
         }
         modelSelect.innerHTML = options;
         
@@ -1863,7 +1868,7 @@
     }
 
     function loadChatGPTStatus() {
-      fetch('/api/chatgpt/status').then(function(r) { return r.json(); }).then(function(data) {
+      apiFetch('/api/chatgpt/status').then(function(r) { return r.json(); }).then(function(data) {
         renderChatGPTStatus(data);
         if (data.running && !chatgptPolling) {
           chatgptPolling = setInterval(loadChatGPTStatus, 2000);
@@ -1884,7 +1889,7 @@
         return;
       }
 
-      fetch('/api/chatgpt/connect', {
+      apiFetch('/api/chatgpt/connect', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'}
       }).then(function(r) { return r.json(); }).then(function(data) {
@@ -1914,6 +1919,8 @@
       // When provider changes - show/hide appropriate fields
       providerSelect.onchange = function() {
         var provider = this.value;
+        apiKeyInput.value = '';
+        document.getElementById('settings-base_url').value = '';
         
         // Show/hide fields based on provider type
         if (isLocal(provider)) {
@@ -1940,9 +1947,9 @@
       };
       
       // Load settings and populate
-      fetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
+      apiFetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
         var provider = s.provider || 'ollama';
-        var apiKey = (s.api_key && s.api_key !== true) ? s.api_key : '';
+        var apiKey = '';
         
         // Set provider
         providerSelect.value = provider;
@@ -1956,29 +1963,18 @@
         } else {
           baseUrlGroup.style.display = 'none';
           apiKeyGroup.style.display = 'block';
+          document.getElementById('settings-base_url').value = '';
+          apiKeyInput.placeholder = s.api_key ? 'Saved key (leave blank to keep)' : 'Enter API key';
           apiKeyInput.value = apiKey;
         }
         updateChatGPTConnectVisibility(provider);
         
         // Load models with the API key
-        loadModelsForProvider(provider, isLocal(provider) ? '' : apiKey);
-        
-        // Select saved model after load
-        setTimeout(function() {
-          if (modelSelect.options.length > 0) {
-            var selected = false;
-            for (var i = 0; i < modelSelect.options.length; i++) {
-              if (modelSelect.options[i].value === s.model) {
-                modelSelect.selectedIndex = i;
-                selected = true;
-                break;
-              }
-            }
-            if (!selected) {
-              modelSelect.selectedIndex = 0;
-            }
+        loadModelsForProvider(provider, apiKey).then(() => {
+          if (Array.from(modelSelect.options).some(option => option.value === s.model)) {
+            modelSelect.value = s.model;
           }
-        }, 500);
+        });
         
       }).catch(function(e) {
         console.error('Error loading settings:', e);
@@ -2007,10 +2003,10 @@
         provider: provider,
         model: model,
         base_url: baseUrl,
-        api_key: apiKey
+        ...(apiKey ? {api_key: apiKey} : {})
       };
 
-      fetch('/api/settings', {
+      apiFetch('/api/settings', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
@@ -2033,11 +2029,11 @@
     }
     
     function loadOllamaModels() {
-      fetch('/api/models').then(function(r) { return r.json(); }).then(function(d) {
+      apiFetch('/api/models').then(function(r) { return r.json(); }).then(function(d) {
         var select = document.getElementById('heretic-model-select');
         select.innerHTML = '<option value="">Select from Ollama...</option>' + 
           d.models.map(function(m) {
-            return '<option value="' + m + '">' + m + '</option>';
+            return '<option value="' + escapeHtml(m) + '">' + escapeHtml(m) + '</option>';
           }).join('');
       });
     }
@@ -2064,7 +2060,7 @@
         upload_to_huggingface: false,
         import_to_ollama: document.getElementById('heretic-ollama').checked
       };
-      fetch('/api/heretic/run', {
+      apiFetch('/api/heretic/run', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
@@ -2090,7 +2086,7 @@
     }
     
     function updateHereticProgress() {
-      fetch('/api/heretic/progress').then(function(r) { return r.json(); }).then(function(p) {
+      apiFetch('/api/heretic/progress').then(function(r) { return r.json(); }).then(function(p) {
         if (!p.running && p.status === 'completed') {
           document.getElementById('progress-fill').style.width = '100%';
           document.getElementById('progress-status').textContent = '✅ Complete!';
@@ -2139,7 +2135,7 @@
         upload_to_huggingface: false,
         import_to_ollama: document.getElementById('heretic-ollama').checked
       };
-      fetch('/api/heretic/run', {
+      apiFetch('/api/heretic/run', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
@@ -2157,25 +2153,23 @@
     
     function updateWorktogetherModels() {
       var provider = document.getElementById('worktogether-provider').value;
-      fetch('/api/worktogether/providers').then(function(r) { return r.json(); }).then(function(d) {
-        var select = document.getElementById('worktogether-model');
-        var models = [];
-        if (provider === 'ollama') {
-          models = d.ollama_models || [];
-        } else {
-          var p = d.providers.find(function(x) { return x.id === provider; });
-          models = p ? p.models : [];
-        }
-        select.innerHTML = models.map(function(m) {
-          return '<option value="' + m + '">' + m + '</option>';
-        }).join('');
-        if (models.length > 0) {
-          select.value = models[0];
-        }
+      const input = document.getElementById('worktogether-model');
+      const key = document.getElementById('worktogether-apikey').value;
+      const url = document.getElementById('worktogether-baseurl').value;
+      input.value = '';
+      modelsRequest(provider, key, url).then(r => r.json()).then(data => {
+        if (provider !== document.getElementById('worktogether-provider').value) return;
+        const models = data.models || [];
+        document.getElementById('team-model-options').replaceChildren(...models.map(m => new Option(m, m)));
+        if (!input.value) input.value = models[0] || '';
       });
+
     }
     
     function showWorktogether() {
+      document.getElementById('worktogether-progress').classList.add('active');
+      updateWorktogetherProgress();
+      if (!worktogetherPolling) worktogetherPolling = setInterval(updateWorktogetherProgress, 2000);
       updateWorktogetherModels();
       document.getElementById('worktogether-modal').classList.add('active');
     }
@@ -2190,17 +2184,16 @@
     }
     
     function updateWorktogetherProgress() {
-      fetch('/api/worktogether/status').then(function(r) { return r.json(); }).then(function(p) {
+      apiFetch('/api/worktogether/status').then(function(r) { return r.json(); }).then(function(p) {
         document.getElementById('worktogether-fill').style.width = p.progress + '%';
         document.getElementById('worktogether-status').textContent = p.status || 'Running...';
         document.getElementById('worktogether-tasks').textContent = (p.tasks?.length || 0) + ' tasks';
-        document.getElementById('worktogether-logs').textContent = (p.logs || '').slice(-500);
-        
-        if (!p.active && p.progress >= 100) {
+        const results = (p.results || []).map(r => [r.role, r.status, r.content].filter(Boolean).join(' · '));
+        document.getElementById('worktogether-logs').textContent =
+          [p.summary, p.error, ...results].filter(Boolean).join('\n\n');
+        if (!p.active) {
           clearInterval(worktogetherPolling);
           worktogetherPolling = null;
-          document.getElementById('worktogether-status').textContent = '✅ Completed!';
-          alert('Worktogether completed! Check the logs for results.');
         }
       });
     }
@@ -2225,14 +2218,15 @@
         base_url: baseUrl
       };
       
-      fetch('/api/worktogether/start', {
+      apiFetch('/api/worktogether/start', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
       }).then(function(r) { return r.json(); }).then(function(result) {
         if (result.status === 'started') {
           document.getElementById('worktogether-progress').classList.add('active');
-          worktogetherPolling = setInterval(updateWorktogetherProgress, 3000);
+          updateWorktogetherProgress();
+          if (!worktogetherPolling) worktogetherPolling = setInterval(updateWorktogetherProgress, 2000);
         } else {
           alert('Error: ' + (result.error || 'Unknown error'));
         }
@@ -2253,7 +2247,7 @@
       window.minimize = function() { window.api.minimize(); };
     }
     
-    connect();
+    document.getElementById('send-btn').disabled = true;
   </script>
 </body>
 </html>

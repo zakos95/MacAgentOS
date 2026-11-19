@@ -1,113 +1,34 @@
-# Mac Agent OS Deployment
+# Construire la bêta macOS
 
-## Profils
+L’application utilise SwiftUI et embarque son serveur Python. Le paquet publié cible Apple Silicon et macOS 14 ou ultérieur. La version minimale déclarée se distingue de la version effectivement testée, indiquée dans les notes de publication.
 
-- `Config/dev.json`
-- `Config/test.json`
-- `Config/prod.json`
+## Compilation
 
-Le packaging lit le profil via `ENVIRONMENT`.
+Depuis la racine du dépôt, avec les outils de développement Swift 6 et Python 3.12 installés :
 
-## Build local
-
-```bash
-cd "$PROJECT_ROOT/NativeMacApp"
-ENVIRONMENT=dev zsh script/build_and_bundle.sh
-```
-
-Pour un build SwiftPM simple en dev :
-
-```bash
-cd "$PROJECT_ROOT"
-CLANG_MODULE_CACHE_PATH=/private/tmp/macagent-clang-cache swift build --package-path "NativeMacApp"
-```
-
-## Bundle final avec backend embarqué
-
-Construire d'abord le backend PyInstaller depuis la racine du projet :
-
-```bash
-cd "$PROJECT_ROOT"
+```sh
+python3.12 -m venv .venv312
 .venv312/bin/python -m pip install -r requirements.txt
+.venv312/bin/python -m pip install pyinstaller
 .venv312/bin/pyinstaller --clean server.spec
+swift test --package-path NativeMacApp
+RELEASE_VERSION=1.1.0-beta.1 BUILD_NUMBER=2 zsh NativeMacApp/script/release.sh
 ```
 
-Créer ensuite l'app avec le backend embarqué :
+Le profil `prod` exige le binaire `dist/MacAgentServer`. `BACKEND_BINARY` permet d’indiquer un autre chemin. Le script produit un DMG, un ZIP, un fichier d’empreintes SHA-256 et des métadonnées dans `NativeMacApp/dist/releases/1.1.0-beta.1/prod`. `NativeMacApp/VERSION` contient la version numérique du bundle. `RELEASE_VERSION` contrôle le nom public des archives.
 
-```bash
-cd "$PROJECT_ROOT/NativeMacApp"
-ENVIRONMENT=prod \
-SIGN_IDENTITY='' \
-CLANG_MODULE_CACHE_PATH=/private/tmp/macagent-clang-cache \
-BACKEND_BINARY="$PROJECT_ROOT/dist/MacAgentServer" \
-zsh script/build_and_bundle.sh
+```sh
+RELEASE_VERSION=1.1.0-beta.1 zsh NativeMacApp/script/verify_release.sh
+RELEASE_VERSION=1.1.0-beta.1 zsh NativeMacApp/script/verify_dmg.sh
+(cd NativeMacApp/dist/releases/1.1.0-beta.1/prod && shasum -a 256 -c SHA256SUMS.txt)
 ```
 
-Sortie locale :
+La signature par défaut est ad hoc. L’ouverture d’un téléchargement sur un autre Mac peut être bloquée par Gatekeeper. La procédure Apple figure dans [Ouverture d’apps en toute sécurité sur votre Mac](https://support.apple.com/fr-fr/102445). Une publication notariée nécessitera une identité Developer ID Application et une soumission à Apple.
 
-```text
-/tmp/MacAgentOS-build/prod/Mac Agent OS.app
-```
+## Exécution et isolation
 
-Au lancement, l'app réutilise un backend Mac Agent OS déjà disponible sur `127.0.0.1:8000`; sinon elle lance `Contents/Resources/MacAgentServer`. À la fermeture, elle arrête seulement le backend lancé par l'app, jamais un `python server.py` externe.
+Au lancement, Mac Agent OS cherche son service sur `127.0.0.1:8000`. Si le port est libre, le backend embarqué démarre. Si un service incompatible utilise ce port, l’app affiche le conflit. À la fermeture, elle arrête le backend qu’elle a lancé. Pour utiliser le backend source, lancer `.venv312/bin/python server.py` avant l’app.
 
-Si le port 8000 est occupé par un autre service, l'app affiche `Port 8000 occupé par un autre service.` et ne démarre pas de backend embarqué supplémentaire.
+Les conversations, connexions et réglages se trouvent dans `~/Library/Application Support/MacAgentOS`. Le journal du backend embarqué se trouve dans `data/logs/backend-bundle.log` sous ce dossier. Pour tester avec des données séparées, lancer le binaire de l’application avec `MACAGENT_APP_SUPPORT_DIR` pointant vers un dossier de test. Les modèles Ollama et les skills personnels de Claude appartiennent à leurs emplacements habituels.
 
-Les logs du backend embarqué sont dans :
-
-```text
-~/Library/Application Support/MacAgentOS/data/logs/backend-bundle.log
-```
-
-## Release versionnée
-
-```bash
-cd "$PROJECT_ROOT/NativeMacApp"
-ENVIRONMENT=prod VERSION=$(cat VERSION) BUILD_NUMBER=1 zsh script/release.sh
-```
-
-Sortie attendue :
-
-- `dist/releases/<version>/<environment>/Mac Agent OS.app`
-- `dist/releases/<version>/<environment>/Mac Agent OS-<version>-<environment>.zip`
-- `dist/releases/<version>/<environment>/Mac Agent OS-<version>-<environment>.dmg`
-- `dist/releases/<version>/<environment>/SHA256SUMS.txt`
-- `dist/releases/<version>/<environment>/build-info.json`
-
-## Vérification
-
-```bash
-cd "$PROJECT_ROOT/NativeMacApp"
-ENVIRONMENT=prod VERSION=$(cat VERSION) zsh script/verify_release.sh
-ENVIRONMENT=prod VERSION=$(cat VERSION) zsh script/verify_dmg.sh
-```
-
-## Signature
-
-Le script utilise `SIGN_IDENTITY` si elle est fournie, sinon la valeur par défaut du projet.
-
-Exemple :
-
-```bash
-SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID)" ENVIRONMENT=prod zsh script/release.sh
-```
-
-## DMG signé vs distribution publique
-
-Un DMG signé avec `Apple Development` est bien signé techniquement, mais ne passe pas forcément l’évaluation Gatekeeper pour une diffusion publique.
-
-Pour une distribution publique propre, il faut :
-
-- un certificat `Developer ID Application`
-- idéalement notarization Apple
-
-## Remarque produit
-
-En dev, l'app peut toujours utiliser un backend externe lancé depuis la racine :
-
-```bash
-cd "$PROJECT_ROOT"
-.venv312/bin/python server.py
-```
-
-Ce mode n'est pas cassé par le bundle final. Si `127.0.0.1:8000` est déjà occupé, l'app réutilise le service uniquement si `/health` répond comme Mac Agent OS; sinon elle affiche une erreur claire.
+Dans Diagnostics, **Importer une configuration…** accepte les fichiers Claude Desktop et projet dotés d’un objet `mcpServers`. Le dialogue affiche les commandes ou les hôtes avant le remplacement de la liste importée. Les connecteurs s’activent après redémarrage du backend. Dans le chat, `/mcp` liste les outils et `/team` suivi d’un objectif lance une équipe.

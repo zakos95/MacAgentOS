@@ -13,6 +13,7 @@ let package = Package(
         .executableTarget(
             name: "NativeMacApp",
             path: "Sources"
-        )
+        ),
+        .testTarget(name: "NativeMacAppTests", dependencies: ["NativeMacApp"], path: "Tests")
     ]
 )

@@ -51,13 +51,14 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response as StarletteResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from core import MacAgentCore, get_core
 from sessions import SessionManager, get_session_manager
 from templates import TemplatesManager, get_templates_manager
 from permissions import PermissionManager, get_permission_manager, PermissionReply
 from skills import SkillsManager, get_skills_manager
+from team_runtime import TeamService, role_prompts, team_goal
 from commands import CommandsManager, get_commands_manager
 from agents import AgentsManager, get_agents_manager
 from plugins import PluginManager, get_plugin_manager
@@ -70,7 +71,9 @@ from app_runtime import load_runtime
 from provider_connections import get_provider_connection_specs
 import self_update as self_update_manager
 
-from paths import get_data_dir, get_project_root
+from paths import get_data_dir, get_project_root, write_private_json
+
+VERSION = "1.1.0-beta.1"
 LOG_DIR = get_data_dir() / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SERVER_LOG_PATH = LOG_DIR / "server.log"
@@ -143,11 +146,13 @@ def _load_or_generate_api_key() -> str:
     if env_key:
         return env_key
     if _API_KEY_FILE.exists():
+        _API_KEY_FILE.chmod(0o600)
         stored = _API_KEY_FILE.read_text().strip()
         if stored:
             return stored
     new_key = secrets.token_urlsafe(32)
-    _API_KEY_FILE.write_text(new_key)
+    with os.fdopen(os.open(_API_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as handle:
+        handle.write(new_key)
     return new_key
 
 _API_KEY: str = _load_or_generate_api_key()
@@ -219,21 +224,22 @@ class _BearerAuthMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MacAgent-OS Server...")
-    logger.info(f"API KEY (Bearer): {_API_KEY}  [stored at: {_API_KEY_FILE}]")
+    logger.info("Local API authentication enabled")
     await state.core.start()
     state.is_ready = True
     logger.info("Server ready!")
     
-    yield
-    
-    # Shutdown
-    logger.info("Shutting down...")
-    await state.core.stop()
+    try:
+        yield
+    finally:
+        state.is_ready = False
+        logger.info("Shutting down...")
+        await state.core.stop()
 
 
 # === APP ===
 
-app = FastAPI(title="MacAgent-OS Server", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="MacAgent-OS Server", version=VERSION, lifespan=lifespan)
 app.add_middleware(_BearerAuthMiddleware)
 
 # === HEALTH ===
@@ -243,7 +249,8 @@ async def health():
     """Health check"""
     return {
         "status": "ok",
-        "version": "0.1.0",
+        "version": VERSION,
+        "service": "MacAgentOS",
         "ready": state.is_ready
     }
 
@@ -255,7 +262,7 @@ async def get_logs(limit: int = 200):
         if not SERVER_LOG_PATH.exists():
             return {"entries": [], "path": str(SERVER_LOG_PATH)}
         lines = SERVER_LOG_PATH.read_text(encoding="utf-8", errors="ignore").splitlines()
-        return {"entries": lines[-max(1, min(limit, 1000)):], "path": str(SERVER_LOG_PATH)}
+        return {"entries": [_redact_sensitive_text(line) for line in lines[-max(1, min(limit, 1000)):]], "path": str(SERVER_LOG_PATH)}
     except Exception as e:
         return {"entries": [f"Unable to read logs: {e}"], "path": str(SERVER_LOG_PATH)}
 
@@ -482,7 +489,10 @@ def _read_text_excerpt(path: Path, limit: int = 12000) -> str:
 
 
 def _redact_sensitive_text(text: str) -> str:
-    redacted = re.sub(r"sk-[A-Za-z0-9_-]{12,}", "sk-***", text or "")
+    if "API KEY (Bearer):" in (text or ""):
+        return "Local API authentication enabled"
+    redacted = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9_.~+/=-]+", "Bearer ***", text or "")
+    redacted = re.sub(r"sk-[A-Za-z0-9_-]{12,}", "sk-***", redacted)
     redacted = re.sub(r"hf_[A-Za-z0-9]{12,}", "hf_***", redacted)
     redacted = re.sub(r"(?i)(api[_-]?key|authorization|bearer|token)(\s*[:=]\s*)['\"]?[^'\"\s]+", r"\1\2***", redacted)
     return redacted
@@ -658,18 +668,19 @@ async def _skills_runtime_context(check_ollama: bool = True) -> dict[str, Any]:
 
 
 @app.get("/api/skills")
-async def list_skills():
+async def list_skills(project_path: str = ""):
     """List all skills"""
     context = await _skills_runtime_context()
-    return {"skills": state.skills_manager.to_dict_list(context)}
+    return {"skills": state.skills_manager.including_markdown(project_path).to_dict_list(context)}
 
 @app.get("/api/skills/{skill_id}")
-async def get_skill(skill_id: str):
+async def get_skill(skill_id: str, project_path: str = ""):
     """Get a skill"""
-    skill = state.skills_manager.get(skill_id)
+    catalog = state.skills_manager.including_markdown(project_path)
+    skill = catalog.get(skill_id)
     if skill:
         context = await _skills_runtime_context()
-        return state.skills_manager.to_dict(skill_id, context)
+        return catalog.to_dict(skill_id, context)
     return JSONResponse({"error": "not found"}, status_code=404)
 
 
@@ -846,33 +857,36 @@ async def self_update_rollback(req: SelfUpdatePathRequest):
 
 
 @app.post("/api/skills/{skill_id}/enable")
-async def enable_skill(skill_id: str):
+async def enable_skill(skill_id: str, project_path: str = ""):
     """Enable a desktop skill for the current user."""
+    catalog = state.skills_manager.including_markdown(project_path)
     try:
-        state.skills_manager.set_enabled(skill_id, True)
+        catalog.set_enabled(skill_id, True)
         context = await _skills_runtime_context()
-        return {"skill": state.skills_manager.to_dict(skill_id, context)}
+        return {"skill": catalog.to_dict(skill_id, context)}
     except KeyError:
         return JSONResponse({"error": "not found"}, status_code=404)
 
 
 @app.post("/api/skills/{skill_id}/disable")
-async def disable_skill(skill_id: str):
+async def disable_skill(skill_id: str, project_path: str = ""):
     """Disable a desktop skill for the current user."""
+    catalog = state.skills_manager.including_markdown(project_path)
     try:
-        state.skills_manager.set_enabled(skill_id, False)
+        catalog.set_enabled(skill_id, False)
         context = await _skills_runtime_context()
-        return {"skill": state.skills_manager.to_dict(skill_id, context)}
+        return {"skill": catalog.to_dict(skill_id, context)}
     except KeyError:
         return JSONResponse({"error": "not found"}, status_code=404)
 
 
 @app.post("/api/skills/{skill_id}/test")
-async def test_skill(skill_id: str):
+async def test_skill(skill_id: str, project_path: str = ""):
     """Run a non-destructive availability test for a skill."""
+    catalog = state.skills_manager.including_markdown(project_path)
     try:
         context = await _skills_runtime_context()
-        return state.skills_manager.test(skill_id, context)
+        return catalog.test(skill_id, context)
     except KeyError:
         return JSONResponse({"error": "not found"}, status_code=404)
 
@@ -984,10 +998,8 @@ async def update_settings(req: SettingsRequest):
         base_url=req.base_url
     )
     # Persist optional split-model keys alongside the main settings
-    if any(v is not None for v in [
-        req.chat_provider, req.chat_model, req.chat_base_url,
-        req.planner_provider, req.planner_model, req.planner_base_url,
-    ]):
+    if req.model_fields_set.intersection({"chat_provider", "chat_model", "chat_base_url",
+                                         "planner_provider", "planner_model", "planner_base_url"}):
         from paths import get_data_dir
         settings_path = get_data_dir() / "settings.json"
         try:
@@ -1004,9 +1016,9 @@ async def update_settings(req: SettingsRequest):
             ]:
                 if val is not None:
                     existing[key] = val
-                elif key in existing:
-                    del existing[key]   # explicit None clears the override
-            settings_path.write_text(json.dumps(existing, indent=2))
+                elif key in req.model_fields_set:
+                    existing.pop(key, None)
+            write_private_json(settings_path, existing)
         except Exception as exc:
             logger.warning("Could not persist split-model settings: %s", exc)
     return {"status": "success"}
@@ -1187,13 +1199,29 @@ async def list_provider_connections():
             provider["runtime"] = bridge
     return {"providers": providers}
 
+class ModelsRequest(BaseModel):
+    api_key: str = ""
+    base_url: str = ""
+
+
+@app.post("/api/llm/models/{provider}")
+async def list_models_for_connection(provider: str, req: ModelsRequest):
+    settings = state.core.get_settings()
+    key = req.api_key
+    url = req.base_url
+    if provider == settings["provider"] and (not url or url == settings.get("base_url")):
+        key = key or settings.get("api_key") or ""
+        url = url or settings.get("base_url") or ""
+    return await get_provider_models(provider, key, url)
+
+
 @app.get("/api/llm/models/{provider}")
 async def get_provider_models(provider: str, api_key: str = "", base_url: str = ""):
     """Liste les modèles disponibles pour un provider - avec API key pour récupérer depuis l'API réelle"""
     try:
         # Pass the API key to get real models from the provider's API
         p = get_provider(provider, api_key=api_key, base_url=base_url)
-        models = p.get_models(api_key=api_key)
+        models = await asyncio.to_thread(p.get_models, api_key=api_key)
         return {"provider": provider, "models": models}
     except Exception as e:
         logger.info("Model listing failed provider=%s error=%s", provider, e)
@@ -3126,7 +3154,7 @@ async def _run_project_coding_agent(
     observations: list[str] = []
 
     for step in range(1, max_steps + 1):
-        result = provider_obj.chat(agent_messages, tools=None)
+        result = await asyncio.to_thread(provider_obj.chat, agent_messages, tools=None)
         if result.get("type") == "error":
             return result
         content = result.get("content", "") if isinstance(result, dict) else ""
@@ -3383,7 +3411,7 @@ async def _run_skill_agent(
     used_tools: list[str] = []
 
     for _ in range(max_steps):
-        result = provider_obj.chat(agent_messages, tools=None)
+        result = await asyncio.to_thread(provider_obj.chat, agent_messages, tools=None)
         if result.get("type") == "error":
             return result
         content = result.get("content", "") if isinstance(result, dict) else ""
@@ -3952,11 +3980,11 @@ class LLMChatRequest(BaseModel):
 
 # --- Models list cache (TTL = 60 s) ---
 # Avoids one round-trip network call per LLM request.
-_models_cache: dict[str, tuple[list[str], float]] = {}
+_models_cache: dict[tuple[str, str, bytes], tuple[list[str], float]] = {}
 _MODELS_CACHE_TTL = 60.0  # seconds
 
 def _get_cached_models(provider: str, api_key: str, model: str, base_url: str) -> list[str]:
-    cache_key = f"{provider}:{base_url}"
+    cache_key = (provider, base_url, hashlib.sha256(api_key.encode()).digest())
     entry = _models_cache.get(cache_key)
     if entry and (time.monotonic() - entry[1]) < _MODELS_CACHE_TTL:
         return entry[0]
@@ -3971,6 +3999,9 @@ def _get_cached_models(provider: str, api_key: str, model: str, base_url: str) -
 @app.post("/api/llm/chat")
 async def llm_chat(req: LLMChatRequest):
     """Envoie un message à un LLM"""
+    mcp_reply = await state.core.hub.chat_command(req.message)
+    if mcp_reply is not None:
+        return {"type": "text", "content": mcp_reply}
     try:
         started_at = time.perf_counter()
         requested_provider = (req.provider or "").strip().lower()
@@ -3980,11 +4011,46 @@ async def llm_chat(req: LLMChatRequest):
         if not requested_provider:
             return {"type": "error", "content": "Choisis un provider IA avant d’envoyer un message."}
         current_settings = state.core.get_settings()
-        if requested_provider == current_settings.get("provider"):
+        if requested_provider == current_settings.get("provider") and (
+            not effective_base_url or effective_base_url == current_settings.get("base_url")
+        ):
             if not effective_api_key:
                 effective_api_key = current_settings.get("api_key", "") or ""
             if not effective_base_url:
                 effective_base_url = current_settings.get("base_url", "") or ""
+        slash = re.fullmatch(r"/([\w-]+)(?:\s+(.*))?", req.message.strip(), re.S)
+        if slash:
+            if requested_provider == "local_chatgpt_codex":
+                return {"type": "error", "content": "Choisis un fournisseur de chat texte comme Ollama pour les skills et les équipes."}
+            if req.attachments:
+                return {"type": "error", "content": "Les commandes de skills et d’équipe acceptent du texte. Colle le contenu dans le message."}
+            command, arguments = slash[1], slash[2] or ""
+            def make_provider():
+                return get_provider(requested_provider, api_key=effective_api_key, model=requested_model, base_url=effective_base_url)
+            provider = make_provider()
+            model = getattr(provider, "model", "") or requested_model
+            if command == "team":
+                goal, names = team_goal(arguments)
+                roles = role_prompts(names, state.skills_manager.personal_root, req.project_path)
+                run = teams.start(goal, requested_provider, model, make_provider, roles)
+                await asyncio.shield(run.job)
+                result = {
+                    "type": "text" if run.status == "completed" else "error",
+                    "content": run.summary or run.error or "Le travail en équipe a été arrêté.",
+                    "team": run.snapshot(),
+                }
+            else:
+                skill_text = state.skills_manager.including_markdown(req.project_path).invoke_markdown(command, arguments)
+                messages = [
+                    {"role": "system", "content": req.system_prompt},
+                    *[item for item in req.history[-4:] if item.get("role") in ("user", "assistant")],
+                    {"role": "user", "content": skill_text},
+                ]
+                result = await asyncio.to_thread(provider.chat, messages)
+                if result.get("type") == "text" and not (result.get("content") or "").strip():
+                    result = {"type": "error", "content": "Le modèle n’a pas renvoyé de texte pour ce skill."}
+            result.update(provider=requested_provider, model=model, actual={"provider": requested_provider, "model": model})
+            return result
         skills_context = ""
         try:
             skills_context = state.skills_manager.build_prompt_extension(
@@ -4009,8 +4075,8 @@ async def llm_chat(req: LLMChatRequest):
             turbo=req.turbo,
         )
 
-        available_models: list[str] = _get_cached_models(
-            requested_provider, effective_api_key, requested_model, effective_base_url
+        available_models: list[str] = await asyncio.to_thread(
+            _get_cached_models, requested_provider, effective_api_key, requested_model, effective_base_url
         )
 
         route = None
@@ -4081,7 +4147,7 @@ async def llm_chat(req: LLMChatRequest):
                 await _skills_runtime_context(check_ollama=False),
                 project_path=req.project_path,
             )
-        result = agent_result or provider.chat(context["messages"], files=req.attachments)
+        result = agent_result or await asyncio.to_thread(provider.chat, context["messages"], files=req.attachments)
         output_text = result.get("content", "") if isinstance(result, dict) else ""
         telemetry = token_optimizer.telemetry.build(actual_model, context["messages"], output_text, started_at)
         telemetry.update({
@@ -4095,7 +4161,7 @@ async def llm_chat(req: LLMChatRequest):
         })
         state.core.last_usage_telemetry = telemetry
 
-        if result.get("type") == "text":
+        if req.project_path and result.get("type") == "text":
             token_optimizer.update_memory(
                 context["project_key"],
                 context["project_label"],
@@ -4378,7 +4444,7 @@ async def test_llm_connection(req: LLMTestRequest):
         )
         
         # Test simple
-        result = provider.chat([
+        result = await asyncio.to_thread(provider.chat, [
             {"role": "user", "content": "Say 'OK' if you can hear me."}
         ])
         
@@ -4594,34 +4660,17 @@ async def list_dynamic_mcps():
 
 @app.get("/api/mcp/dynamic/tools")
 async def list_all_tools():
-    """Liste TOUS les outils MCP disponibles (fixes + dynamiques)"""
-    # MCPs fixes
-    fixed_tools = [
-        {"name": "filesystem_read", "description": "Lire des fichiers", "server": "filesystem"},
-        {"name": "filesystem_write", "description": "Écrire des fichiers", "server": "filesystem"},
-        {"name": "safari_navigate", "description": "Naviguer Safari", "server": "safari"},
-        {"name": "mac_execute", "description": "Exécuter commande Mac", "server": "mac-control"},
-    ]
-    
-    # MCPs dynamiques
-    dynamic_mcps = _mcp_factory.list_created_mcps()
+    """List the actual tools advertised during MCP initialization."""
+    fixed_tools = []
     dynamic_tools = []
-    
-    for app_key, mcp_info in dynamic_mcps.items():
-        tools = mcp_info.get("tools", ["activate", "quit"])
-        for tool in tools:
-            dynamic_tools.append({
-                "name": f"{app_key}_{tool}",
-                "description": f"Outil {tool} pour {mcp_info['name']}",
-                "server": f"dynamic_{app_key}",
-                "app": mcp_info['name']
-            })
-    
-    return {
-        "fixed_tools": fixed_tools,
-        "dynamic_tools": dynamic_tools,
-        "total": len(fixed_tools) + len(dynamic_tools)
-    }
+    for name, tools in sorted(state.core.hub.tools.items()):
+        target = fixed_tools if name in {"mac-control", "safari"} else dynamic_tools
+        for tool_name, tool in sorted(tools.items()):
+            target.append({"server": name, "name": tool_name, "description": tool.description or "",
+                           "inputSchema": tool.inputSchema})
+    return {"fixed_tools": fixed_tools, "dynamic_tools": dynamic_tools,
+            "total": len(fixed_tools) + len(dynamic_tools)}
+
 
 @app.post("/api/mcp/dynamic/create")
 async def create_mcp_for_app(request: Request):
@@ -4823,9 +4872,7 @@ async def connect_remote(url: str, name: str = "Remote"):
 @app.get("/api/debug/export")
 async def export_debug():
     """Export debug info"""
-    from core import get_core
-    core = get_core()
-    runtime_state = core.get_state()
+    runtime_state = state.core.get_state()
     files = state.debug_exporter.export_full(runtime_state)
     return files
 
@@ -4840,95 +4887,67 @@ async def export_logs():
 
 @app.websocket("/ws")
 async def websocket_chat(websocket: WebSocket):
-    """WebSocket chat endpoint"""
+    origin = websocket.headers.get("origin")
+    if origin and origin not in {f"http://{websocket.url.netloc}", f"https://{websocket.url.netloc}"}:
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
-    logger.info("Client connected")
-    
-    # Get or create session
-    session = state.session_manager.get() or state.session_manager.create("Web Session")
-    session_id = session.id
-    
     try:
+        auth = websocket.headers.get("authorization", "")
+        if not auth:
+            # Browsers cannot set Authorization on the upgrade request.
+            frame = await asyncio.wait_for(websocket.receive_json(), timeout=12)
+            if isinstance(frame, dict) and isinstance(frame.get("token"), str):
+                auth = "Bearer " + frame["token"]
+        if not secrets.compare_digest(auth.encode(), ("Bearer " + _API_KEY).encode()):
+            await websocket.close(code=1008)
+            return
+        await websocket.send_json({"event_type": "ready"})
+        session = state.session_manager.get() or state.session_manager.create("Web Session")
         while True:
-            # Receive message
-            raw_data = await websocket.receive_text()
-            allow_auto_routing = False
-            data = raw_data
-            requested_provider = None
-            requested_model = None
-            requested_api_key = None
-            requested_base_url = None
-            requested_system_prompt = None
-            requested_turbo = False
-
+            raw = await websocket.receive_text()
             try:
-                payload = json.loads(raw_data)
-                if isinstance(payload, dict):
-                    data = payload.get("message", "") or ""
-                    allow_auto_routing = bool(payload.get("allow_auto_routing", False))
-                    requested_provider = payload.get("provider")
-                    requested_model = payload.get("model")
-                    requested_api_key = payload.get("api_key")
-                    requested_base_url = payload.get("base_url")
-                    requested_system_prompt = payload.get("system_prompt")
-                    requested_turbo = bool(payload.get("turbo", False))
-            except Exception:
-                pass
-
-            logger.info(f"Received: {data[:50]}...")
-            
-            # Send typing indicator
-            await websocket.send_json({"event_type": "typing", "content": "L'IA réfléchit..."})
-            
-            # Execute
-            events = await state.core.execute(
-                data,
-                session.messages,
-                allow_auto_routing=allow_auto_routing,
-                provider=requested_provider,
-                model=requested_model,
-                api_key=requested_api_key,
-                base_url=requested_base_url,
-                system_prompt=requested_system_prompt,
-                turbo=requested_turbo,
-            )
-            
-            # Send events
-            for event in events:
-                await websocket.send_json(event.to_dict())
-                
-                # Save to session
-                if event.event_type == "text":
-                    state.session_manager.add_message("assistant", event.content, session_id=session_id)
-                elif event.event_type == "tool_call":
-                    state.session_manager.add_message(
-                        "assistant",
-                        f"Tool: {event.tool_name}",
-                        tool_calls=[{"name": event.tool_name, "arguments": event.tool_args}],
-                        session_id=session_id
-                    )
-
-            usage = state.core.last_usage_telemetry or {}
-            requested = usage.get("requested", {})
-            actual = usage.get("actual", {})
-            route = usage.get("route", {})
-            if requested or actual:
+                payload = json.loads(raw)
+            except ValueError:
+                payload = None
+            if not isinstance(payload, dict):
+                payload = {"message": raw}
+            if payload.get("session_id"):
+                selected = state.session_manager.get(payload["session_id"])
+                if selected is None:
+                    await websocket.send_json({"event_type": "error", "content": "Conversation introuvable."})
+                    continue
+                session = selected
+            settings = state.core.get_settings()
+            payload.setdefault("provider", settings["provider"])
+            payload.setdefault("model", settings["model"])
+            payload["history"] = [{"role": m.role, "content": m.content} for m in session.messages[-20:]]
+            try:
+                request = LLMChatRequest.model_validate(payload)
+            except ValidationError:
+                await websocket.send_json({"event_type": "error", "content": "Message invalide."})
+                continue
+            await websocket.send_json({"event_type": "typing"})
+            state.session_manager.add_message("user", request.message, session_id=session.id)
+            result = await llm_chat(request)
+            content = result.get("content") or ""
+            if result.get("type") == "text":
+                state.session_manager.add_message("assistant", content, session_id=session.id)
+            await websocket.send_json({"event_type": result.get("type", "error"), "content": content, "session_id": session.id})
+            if result.get("actual"):
                 await websocket.send_json({
                     "event_type": "execution_meta",
-                    "requested_provider": requested.get("provider", state.core.llm.provider),
-                    "requested_model": requested.get("model", state.core.llm.model),
-                    "actual_provider": actual.get("provider", state.core.llm.provider),
-                    "actual_model": actual.get("model", state.core.llm.model),
-                    "fallback_reason": route.get("fallback_reason", ""),
-                    "route_tier": route.get("tier", ""),
-                    "route_reason": route.get("reason", ""),
+                    "session_id": session.id,
+                    "actual_provider": result["actual"]["provider"],
+                    "actual_model": result["actual"]["model"],
+                    "requested_provider": request.provider,
+                    "requested_model": request.model,
+                    "fallback_reason": result.get("route", {}).get("fallback_reason", ""),
                 })
-            
-            # Save user message
-            state.session_manager.add_message("user", data, session_id=session_id)
-    
+    except (ValueError, asyncio.TimeoutError):
+        await websocket.close(code=1008)
     except WebSocketDisconnect:
-        logger.info("Client disconnected")
+        pass
 
 
 # === EVENT STREAM ===
@@ -4971,22 +4990,13 @@ class WorkGoalRequest(BaseModel):
     model: str = ""
     base_url: str = ""
     max_iterations: int = 20
+    agents: list[str] = []
+    project_path: str = ""
 
 class WorkChatRequest(BaseModel):
     message: str
 
-# Worktogether state
-worktogether_state = {
-    "active": False,
-    "goal": "",
-    "progress": 0,
-    "tasks": [],
-    "results": [],
-    "logs": "",
-    "status": "idle",
-    "provider": "ollama",
-    "model": ""
-}
+teams = TeamService()
 
 # Get available Ollama models
 def get_ollama_models():
@@ -5002,132 +5012,58 @@ def get_ollama_models():
 @app.get("/api/worktogether/status")
 async def worktogether_status():
     """Get Worktogether status"""
-    return worktogether_state
+    return teams.snapshot()
 
 @app.get("/api/worktogether/providers")
 async def worktogether_providers():
-    """Get available providers and models - TOUS LES PROVIDERS"""
-    from llm_universal import get_all_providers_info, get_provider, PROVIDERS
-    
-    ollama_models = get_ollama_models()
-    
-    # Tous les providers avec leurs modèles
-    providers = []
-    
-    provider_list = [
-        {"id": "ollama", "name": "Ollama", "models": ollama_models},
-        {"id": "openai", "name": "OpenAI", "models": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"]},
-        {"id": "anthropic", "name": "Anthropic", "models": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"]},
-        {"id": "gemini", "name": "Google Gemini", "models": ["gemini-2.0-flash-exp", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.5-flash-8b"]},
-        {"id": "mistral", "name": "Mistral AI", "models": ["mistral-large-latest", "mistral-small-latest", "mistral-medium-latest", "mixtral-8x7b"]},
-        {"id": "cohere", "name": "Cohere", "models": ["command-r-plus", "command-r", "command"]},
-        {"id": "groq", "name": "Groq", "models": ["llama-3.1-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]},
-        {"id": "huggingface", "name": "HuggingFace", "models": ["meta-llama/Llama-3.1-8B-Instruct", "meta-llama/Llama-3.1-70B-Instruct", "mistralai/Mistral-7B-Instruct-v0.2"]},
-        {"id": "lmstudio", "name": "LM Studio", "models": ollama_models},  # Same as Ollama
-        {"id": "azure", "name": "Azure OpenAI", "models": ["gpt-4", "gpt-4-turbo", "gpt-35-turbo"]},
+    """Provider choices for Worktogether, plus installed local models for older clients."""
+    ollama_models = await asyncio.to_thread(get_ollama_models)
+    providers = [
+        {"id": spec["id"], "name": spec["name"], "models": ollama_models if spec["id"] == "ollama" else []}
+        for spec in get_all_providers_info() if spec["id"] != "local_chatgpt_codex"
     ]
-    
-    return {
-        "providers": provider_list,
-        "ollama_models": ollama_models
-    }
+    return {"providers": providers, "ollama_models": ollama_models}
+
 
 @app.post("/api/worktogether/start")
 async def worktogether_start(req: WorkGoalRequest):
-    """Start Worktogether agent system"""
-    import subprocess
-    import threading
-    
-    worktogether_state["active"] = True
-    worktogether_state["goal"] = req.goal
-    worktogether_state["progress"] = 0
-    worktogether_state["tasks"] = []
-    worktogether_state["results"] = []
-    worktogether_state["logs"] = ""
-    worktogether_state["status"] = "running"
-    worktogether_state["provider"] = req.provider
-    worktogether_state["model"] = req.model
-    
-    def run_worktogether():
-        base_dir = get_project_root()
-        agent_dir = base_dir / "agent-system"
-        
-        if not agent_dir.exists():
-            worktogether_state["error"] = "Agent system not found"
-            worktogether_state["active"] = False
-            worktogether_state["status"] = "failed"
-            return
-        
-        # Build environment with LLM settings
-        env = {**os.environ}
-        
-        if req.provider == "ollama":
-            # Use local Ollama
-            env["LLM_PROVIDER"] = "ollama"
-            env["OLLAMA_MODEL"] = req.model or "dolphin3:latest"
-            if req.base_url:
-                env["OLLAMA_BASE_URL"] = req.base_url
-        elif req.provider == "openai":
-            env["LLM_PROVIDER"] = "openai"
-            env["OPENAI_API_KEY"] = req.api_key or os.environ.get("OPENAI_API_KEY", "")
-            env["OPENAI_MODEL"] = req.model or "gpt-4"
-            if req.base_url:
-                env["OPENAI_BASE_URL"] = req.base_url
-        elif req.provider == "anthropic":
-            env["LLM_PROVIDER"] = "anthropic"
-            env["ANTHROPIC_API_KEY"] = req.api_key or os.environ.get("ANTHROPIC_API_KEY", "")
-            env["ANTHROPIC_MODEL"] = req.model or "claude-3-sonnet"
-            if req.base_url:
-                env["ANTHROPIC_BASE_URL"] = req.base_url
-        elif req.provider == "gemini":
-            env["LLM_PROVIDER"] = "gemini"
-            env["GEMINI_API_KEY"] = req.api_key or os.environ.get("GEMINI_API_KEY", "")
-            env["GEMINI_MODEL"] = req.model or "gemini-2.0-flash"
-        
-        cmd = ["node", "index.js", req.goal]
-        
-        proc = subprocess.Popen(
-            cmd,
-            cwd=str(agent_dir),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            env=env
-        )
-        
-        for line in iter(proc.stdout.readline, ''):
-            if line:
-                worktogether_state["logs"] = (worktogether_state.get("logs", "") + line)[:3000]
-                if "Task" in line or "✅" in line or "❌" in line or "task" in line.lower():
-                    worktogether_state["progress"] = min(100, worktogether_state["progress"] + 10)
-        
-        proc.wait()
-        
-        if proc.returncode == 0:
-            worktogether_state["progress"] = 100
-            worktogether_state["status"] = "completed"
-        else:
-            worktogether_state["status"] = "failed"
-        
-        worktogether_state["active"] = False
-    
-    thread = threading.Thread(target=run_worktogether)
-    thread.start()
-    
-    return {"status": "started", "goal": req.goal, "provider": req.provider, "model": req.model}
+    """Start two independent text agents and synthesize their contributions."""
+    try:
+        name = req.provider.strip().lower()
+        if name == "local_chatgpt_codex":
+            raise ValueError("Choisis un fournisseur de chat texte comme Ollama pour les équipes.")
+        saved = state.core.get_settings()
+        same_provider = name == saved.get("provider")
+        same_endpoint = same_provider and (not req.base_url or req.base_url == saved.get("base_url"))
+        key = req.api_key or (saved.get("api_key", "") if same_endpoint else "")
+        url = req.base_url or (saved.get("base_url", "") if same_provider else "")
+        model = req.model or (saved.get("model", "") if same_provider else "")
+        def make_provider():
+            return get_provider(name, api_key=key, model=model, base_url=url)
+        actual_model = make_provider().model
+        roles = role_prompts(req.agents, state.skills_manager.personal_root, req.project_path)
+        teams.start(req.goal, name, actual_model, make_provider, roles)
+        return {"status": "started", "goal": req.goal, "provider": name, "model": actual_model}
+    except (ValueError, RuntimeError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=409 if isinstance(exc, RuntimeError) else 400)
+
 
 @app.get("/api/worktogether/stop")
+@app.post("/api/worktogether/stop")
 async def worktogether_stop():
-    """Stop Worktogether"""
-    worktogether_state["active"] = False
-    worktogether_state["status"] = "stopped"
-    return {"status": "stopped"}
+    if teams.current:
+        teams.current.stop()
+    return {"status": teams.snapshot()["status"]}
+
 
 @app.post("/api/worktogether/chat")
 async def worktogether_chat(req: WorkChatRequest):
-    """Chat with Worktogether agent"""
-    # This would connect to the LLM for chat
-    return {"response": "Chat feature coming soon"}
+    try:
+        if not teams.current:
+            raise ValueError("Commence par lancer un travail en équipe.")
+        return {"response": await teams.current.follow_up(req.message)}
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
 
 
 # === RUN ===
@@ -5147,4 +5083,4 @@ if __name__ == "__main__":
             file=sys.stderr,
         )
         sys.exit(98)
-    uvicorn.run(app, host=runtime.host, port=runtime.port, log_level=runtime.log_level)
+    uvicorn.run(app, host=runtime.host, port=runtime.port, log_level=runtime.log_level, access_log=False)

@@ -235,6 +235,7 @@ final class AppState {
 
     struct HealthPayload: Decodable {
         let ready: Bool
+        let service: String
     }
 
     struct ChatReply: Decodable {
@@ -655,7 +656,6 @@ final class AppState {
     }
 
     /// Load the API key written by server.py at startup.
-    /// Tries (in order): env var → Application Support (production) → dev paths.
     private func loadBearerToken() {
         // 1. Environment variable override
         if let env = ProcessInfo.processInfo.environment["MACAGENT_API_KEY"], !env.isEmpty {
@@ -663,35 +663,16 @@ final class AppState {
             bearerTokenError = ""
             return
         }
-        // 2. Candidate paths — production path first, then dev fallbacks
-        let appSupportKey = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
-        ).first?.appendingPathComponent("MacAgentOS/data/api_key.txt")
-
-        let cwdParent = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("data/api_key.txt")
-        let bundleParent = Bundle.main.bundleURL
-            .deletingLastPathComponent()  // MacOS
-            .deletingLastPathComponent()  // Contents
-            .deletingLastPathComponent()  // .app
-            .deletingLastPathComponent()  // build output
-            .deletingLastPathComponent()  // debug|release
-            .deletingLastPathComponent()  // .build
-            .deletingLastPathComponent()  // NativeMacApp
-            .appendingPathComponent("data/api_key.txt")
-
-        let candidates = [appSupportKey, cwdParent, bundleParent].compactMap { $0 }
-        for url in candidates {
-            if let raw = try? String(contentsOf: url, encoding: .utf8) {
-                let token = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !token.isEmpty {
-                    bearerToken = token
-                    bearerTokenError = ""
-                    return
-                }
+        let url = conversationsDirectory.appending(path: "data/api_key.txt")
+        if let raw = try? String(contentsOf: url, encoding: .utf8) {
+            let token = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !token.isEmpty {
+                bearerToken = token
+                bearerTokenError = ""
+                return
             }
         }
+        bearerToken = ""
         bearerTokenError = "Token introuvable — le backend n'a pas encore démarré."
     }
 
@@ -714,9 +695,12 @@ final class AppState {
             }
             do {
                 let payload = try JSONDecoder().decode(HealthPayload.self, from: data)
+                guard payload.service == "MacAgentOS" else {
+                    return .occupied(l("Le service sur le port 8000 est incompatible.", "The service on port 8000 is incompatible."))
+                }
                 return .ready(payload.ready)
             } catch {
-                return .occupied("Port 8000 répond, mais ce n’est pas Mac Agent OS.")
+                return .occupied(l("Service incompatible sur le port 8000. Ferme l’ancienne version de Mac Agent OS si elle est ouverte.", "Incompatible service on port 8000. Quit any previous version of Mac Agent OS."))
             }
         } catch {
             return .unavailable
@@ -750,8 +734,7 @@ final class AppState {
 
         // Redirect I/O to a file so the app never blocks on pipes and failures
         // remain diagnosable outside the UI.
-        let logsDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/MacAgentOS/data/logs", isDirectory: true)
+        let logsDir = conversationsDirectory.appending(path: "data/logs", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
         let logURL = logsDir.appendingPathComponent("backend-bundle.log")
         if !FileManager.default.fileExists(atPath: logURL.path) {
@@ -873,6 +856,9 @@ final class AppState {
     }
 
     private func dataForAuthorizedRequest(_ request: URLRequest) async throws -> Data {
+        guard isBackendReady else {
+            throw RuntimeUserError.message(l("Le backend Mac Agent OS est indisponible.", "The Mac Agent OS backend is unavailable."))
+        }
         var authorizedRequest = authorized(request)
         if authorizedRequest.timeoutInterval <= 0 {
             authorizedRequest.timeoutInterval = 45
@@ -1046,18 +1032,16 @@ final class AppState {
 
         // Re-load token: if launchBackendIfNeeded() just started the server,
         // the api_key.txt file is now written and can be read.
-        if bearerToken.isEmpty {
-            loadBearerToken()
-        }
+        loadBearerToken()
+
+        guard backendAvailable else { return }
 
         if !bearerTokenError.isEmpty {
             statusText = bearerTokenError
             appendLog("⚠️ Auth: \(bearerTokenError)")
         } else {
-            appendLog("Auth: token chargé (\(bearerToken.prefix(6))…)")
+            appendLog("Authentification locale disponible")
         }
-
-        guard backendAvailable else { return }
 
         await refreshSettings()
         await refreshProviders()
@@ -1071,6 +1055,7 @@ final class AppState {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !composerAttachments.isEmpty, !isSending else { return }
         ensureWritableConversation()
+        guard let conversationID = currentConversationID else { return }
         appendLog("Envoi d’un message via \(provider) • \(currentModel)")
         startLiveActivity(reasoningEnabled ? "Réflexion en cours" : "Réponse en cours")
         pushLiveActivity("Analyse de la demande")
@@ -1084,7 +1069,7 @@ final class AppState {
             ]
         }
 
-        appendMessage(.init(role: .user, text: userVisibleText, meta: "Vous"))
+        appendMessage(.init(role: .user, text: userVisibleText, meta: "Vous"), to: conversationID)
         inputText = ""
         userIsReviewingHistory = false
         shouldForceScrollOnNextAssistantMessage = true
@@ -1095,14 +1080,14 @@ final class AppState {
         do {
             // try? — if the planner fails (network error, decode error, auth hiccup)
             // we fall through to normal LLM chat instead of surfacing an error.
-            if composerAttachments.isEmpty,
+            if !trimmed.hasPrefix("/"), composerAttachments.isEmpty,
                let planned = try? await planLocalAction(for: trimmed) {
                 appendMessage(.init(
                     role: .system,
                     text: "",
                     meta: "Action locale",
                     localActionApproval: planned
-                ))
+                ), to: conversationID)
                 finishLiveActivity("Validation requise")
                 return
             }
@@ -1125,7 +1110,7 @@ final class AppState {
             ])
 
             var request = URLRequest(url: serverBaseURL.appending(path: "/api/llm/chat"))
-            request.timeoutInterval = provider == "local_chatgpt_codex" ? 90 : 60
+            request.timeoutInterval = trimmed.split(whereSeparator: \.isWhitespace).first == "/team" ? 420 : 180
             request.httpMethod = "POST"
             request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -1135,7 +1120,7 @@ final class AppState {
             let decoded = try JSONDecoder().decode(ChatReply.self, from: data)
             if decoded.type == "error" {
                 let message = userFacingLLMError(decoded.content, provider: decoded.actual?.provider ?? decoded.provider)
-                appendMessage(.init(role: .system, text: message, meta: "Erreur"))
+                appendMessage(.init(role: .system, text: message, meta: "Erreur"), to: conversationID)
                 appendLog("Erreur modèle: \(message)")
                 failLiveActivity("Erreur pendant la réponse")
                 return
@@ -1145,13 +1130,13 @@ final class AppState {
                 text: decoded.content,
                 meta: assistantMeta(for: decoded),
                 executionInfo: executionInfo(for: decoded)
-            ))
+            ), to: conversationID)
             composerAttachments = []
             appendLog("Réponse reçue du modèle")
             finishLiveActivity("Réponse prête")
         } catch {
             let message = describeError(error)
-            appendMessage(.init(role: .system, text: message, meta: "Erreur"))
+            appendMessage(.init(role: .system, text: message, meta: "Erreur"), to: conversationID)
             appendLog("Erreur d’envoi: \(message)")
             failLiveActivity("Erreur pendant la réponse")
         }
@@ -1365,9 +1350,19 @@ final class AppState {
         }
     }
 
+    private func skillsURL(id: String? = nil, action: String? = nil) -> URL {
+        var url = serverBaseURL.appending(path: "/api/skills")
+        if let id { url.append(component: id) }
+        if let action { url.append(component: action) }
+        if !activeProjectPath.isEmpty {
+            url.append(queryItems: [URLQueryItem(name: "project_path", value: activeProjectPath)])
+        }
+        return url
+    }
+
     func refreshSkills() async {
         do {
-            let data = try await dataForAuthorizedURL(serverBaseURL.appending(path: "/api/skills"))
+            let data = try await dataForAuthorizedURL(skillsURL())
             let payload = try JSONDecoder().decode(SkillsPayload.self, from: data)
             skills = payload.skills
             skillsStatusText = "Skills chargés"
@@ -1379,7 +1374,7 @@ final class AppState {
 
     func setSkillEnabled(_ skillID: String, enabled: Bool) async {
         do {
-            var request = URLRequest(url: serverBaseURL.appending(path: "/api/skills/\(skillID)/\(enabled ? "enable" : "disable")"))
+            var request = URLRequest(url: skillsURL(id: skillID, action: enabled ? "enable" : "disable"))
             request.httpMethod = "POST"
             let data = try await dataForAuthorizedRequest(request)
             let payload = try JSONDecoder().decode(SkillMutationPayload.self, from: data)
@@ -1399,13 +1394,12 @@ final class AppState {
         testingSkillIDs.insert(skillID)
         defer { testingSkillIDs.remove(skillID) }
         do {
-            var request = URLRequest(url: serverBaseURL.appending(path: "/api/skills/\(skillID)/test"))
+            var request = URLRequest(url: skillsURL(id: skillID, action: "test"))
             request.httpMethod = "POST"
             let data = try await dataForAuthorizedRequest(request)
             let payload = try JSONDecoder().decode(SkillTestPayload.self, from: data)
             skillsStatusText = payload.message
             appendLog("Test skill \(payload.id): \(payload.status)")
-            await refreshSkills()
         } catch {
             skillsStatusText = "Test du skill impossible: \(describeError(error))"
             appendLog(skillsStatusText)
@@ -1539,38 +1533,23 @@ final class AppState {
 
     func refreshHealth() async {
         for attempt in 0...max(0, runtimeConfig.healthRetries) {
-            do {
-                let (data, response) = try await URLSession.shared.data(from: serverBaseURL.appending(path: "/health"))
-                if let httpResponse = response as? HTTPURLResponse,
-                   !(200..<300).contains(httpResponse.statusCode) {
-                    isBackendReady = false
-                    statusText = "Port 8000 occupé par un autre service"
-                    appendLog(statusText)
-                    return
-                }
-                let payload: HealthPayload
-                do {
-                    payload = try JSONDecoder().decode(HealthPayload.self, from: data)
-                } catch {
-                    isBackendReady = false
-                    statusText = "Port 8000 répond, mais ce n’est pas Mac Agent OS"
-                    appendLog(statusText)
-                    return
-                }
-                isBackendReady = payload.ready
-                statusText = payload.ready ? "Backend prêt" : "Backend non prêt"
-                appendLog(statusText)
-                return
-            } catch {
+            switch await probeBackend() {
+            case .ready(let ready):
+                isBackendReady = ready
+                statusText = ready ? "Backend prêt" : "Backend non prêt"
+            case .occupied(let message):
+                isBackendReady = false
+                statusText = message
+            case .unavailable:
+                isBackendReady = false
                 if attempt < runtimeConfig.healthRetries {
-                    let delay = UInt64(runtimeConfig.healthRetryDelayMs) * 1_000_000
-                    try? await Task.sleep(nanoseconds: delay)
+                    try? await Task.sleep(for: .milliseconds(runtimeConfig.healthRetryDelayMs))
                     continue
                 }
-                isBackendReady = false
                 statusText = "Backend introuvable"
-                appendLog("Backend introuvable")
             }
+            appendLog(statusText)
+            return
         }
     }
 
@@ -1647,21 +1626,19 @@ final class AppState {
         }
     }
 
+    private func fetchModelList(for id: String, connection: ProviderConnection?) async throws -> ProviderModelsPayload {
+        var request = URLRequest(url: serverBaseURL.appending(path: "/api/llm/models/\(id)"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["api_key": connection?.apiKey ?? "", "base_url": connection?.baseURL ?? ""])
+        let data = try await dataForAuthorizedRequest(request)
+        return try JSONDecoder().decode(ProviderModelsPayload.self, from: data)
+    }
+
     func refreshModelsForCurrentProvider() async {
         do {
             let connection = providerConnection(for: provider)
-            var components = URLComponents(url: serverBaseURL.appending(path: "/api/llm/models/\(provider)"), resolvingAgainstBaseURL: false)!
-            var queryItems: [URLQueryItem] = []
-            if let connection, !connection.apiKey.isEmpty {
-                queryItems.append(URLQueryItem(name: "api_key", value: connection.apiKey))
-            }
-            if let connection, !connection.baseURL.isEmpty {
-                queryItems.append(URLQueryItem(name: "base_url", value: connection.baseURL))
-            }
-            components.queryItems = queryItems.isEmpty ? nil : queryItems
-            let url = components.url ?? serverBaseURL.appending(path: "/api/llm/models/\(provider)")
-            let data = try await dataForAuthorizedURL(url)
-            let payload = try JSONDecoder().decode(ProviderModelsPayload.self, from: data)
+            let payload = try await fetchModelList(for: provider, connection: connection)
             availableModels = payload.models
             if provider == "openai" {
                 openAIModels = payload.models
@@ -1861,17 +1838,16 @@ final class AppState {
         }
     }
 
-    private func appendMessage(_ message: ChatMessage) {
-        ensureWritableConversation()
-        guard let index = currentConversationIndex else { return }
+    private func appendMessage(_ message: ChatMessage, to conversationID: UUID) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
         conversations[index].messages.append(message)
         conversations[index].updatedAt = .now
-        if message.role == .assistant {
+        if message.role == .assistant && currentConversationID == conversationID {
             if !userIsReviewingHistory || shouldForceScrollOnNextAssistantMessage {
                 pendingScrollMessageID = message.id
             }
             shouldForceScrollOnNextAssistantMessage = false
-        } else if message.role == .user || message.role == .system {
+        } else if currentConversationID == conversationID && (message.role == .user || message.role == .system) {
             pendingScrollMessageID = message.id
         }
         retitleConversationIfNeeded(at: index)
@@ -2302,7 +2278,7 @@ final class AppState {
                 withIntermediateDirectories: true
             )
             let data = try JSONEncoder().encode(conversations)
-            try data.write(to: conversationsURL, options: .atomic)
+            try writePrivateFile(data, to: conversationsURL)
         } catch {
             NSSound.beep()
         }
@@ -2405,7 +2381,7 @@ final class AppState {
         do {
             try FileManager.default.createDirectory(at: conversationsDirectory, withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(providerConnections)
-            try data.write(to: providerConnectionsURL, options: .atomic)
+            try writePrivateFile(data, to: providerConnectionsURL)
         } catch {
             appendLog("Impossible de sauvegarder les connexions providers")
         }
@@ -2437,18 +2413,7 @@ final class AppState {
     func listModels(for connectionID: String) async {
         guard let connection = providerConnection(for: connectionID), connection.supportsModelListing else { return }
         do {
-            var components = URLComponents(url: serverBaseURL.appending(path: "/api/llm/models/\(connectionID)"), resolvingAgainstBaseURL: false)!
-            var queryItems: [URLQueryItem] = []
-            if !connection.apiKey.isEmpty {
-                queryItems.append(URLQueryItem(name: "api_key", value: connection.apiKey))
-            }
-            if !connection.baseURL.isEmpty {
-                queryItems.append(URLQueryItem(name: "base_url", value: connection.baseURL))
-            }
-            components.queryItems = queryItems.isEmpty ? nil : queryItems
-            let url = components.url ?? serverBaseURL.appending(path: "/api/llm/models/\(connectionID)")
-            let data = try await dataForAuthorizedURL(url)
-            let payload = try JSONDecoder().decode(ProviderModelsPayload.self, from: data)
+            let payload = try await fetchModelList(for: connectionID, connection: connection)
             if let index = providerConnections.firstIndex(where: { $0.id == connectionID }) {
                 providerConnections[index].availableModels = payload.models
                 if providerConnections[index].model.isEmpty, let first = payload.models.first {
@@ -2631,7 +2596,10 @@ final class AppState {
         }
     }
 
-    private var conversationsDirectory: URL {
+    var conversationsDirectory: URL {
+        if let path = ProcessInfo.processInfo.environment["MACAGENT_APP_SUPPORT_DIR"], !path.isEmpty {
+            return URL(fileURLWithPath: path, isDirectory: true)
+        }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return base.appendingPathComponent("MacAgentOS", isDirectory: true)
@@ -2964,6 +2932,17 @@ struct ChatScreen: View {
 
                                 Spacer()
 
+                                Menu {
+                                    Button(appState.l("Équipe d’agents · /team", "Agent team · /team")) {
+                                        appState.inputText = "/team " + appState.inputText
+                                    }
+                                    Button(appState.l("Lister les outils · /mcp", "List tools · /mcp")) {
+                                        appState.inputText = "/mcp"
+                                    }
+                                } label: {
+                                    Label(appState.l("Commandes", "Commands"), systemImage: "command")
+                                }
+                                .fixedSize()
                                 Text(composerHint)
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.7))
@@ -3512,7 +3491,7 @@ struct SkillsView: View {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Skills")
                             .font(.title2.weight(.semibold))
-                        Text("Modules desktop activables pour guider le chat et les actions locales.")
+                        Text(appState.l("Les skills Claude de ~/.claude/skills et du projet actif se lancent avec /nom-du-skill dans le chat.", "Run Claude skills from ~/.claude/skills or the selected project with /skill-name in chat."))
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
@@ -4274,6 +4253,7 @@ struct DiagnosticsView: View {
                     diagnosticCard(title: "MCP") {
                         LabeledContent("Actifs", value: "\(appState.diagnosticsSummary?.mcp?.active_count ?? 0)")
                         LabeledContent("Ignorés", value: "\(appState.diagnosticsSummary?.mcp?.skipped_count ?? 0)")
+                        MCPImportControls(appState: appState)
                         let active = appState.diagnosticsSummary?.mcp?.active ?? []
                         if !active.isEmpty {
                             Text("Actifs: \(active.joined(separator: ", "))")

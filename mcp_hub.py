@@ -1,69 +1,44 @@
+"""MCP tool discovery and sessions for the native and web clients."""
 import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import sys
-from typing import Any, Dict, List, Optional
+from contextlib import AsyncExitStack
+from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
+from typing import Optional
+from urllib.parse import urlsplit
 
+import httpx
 from mcp import ClientSession, StdioServerParameters
+from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamable_http_client
+from pydantic import AnyUrl
 
-# Configuration du logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger("MacAgent-MCP")
-from paths import get_project_root, get_app_support_dir
+from paths import get_app_support_dir, get_project_root
+
 PROJECT_ROOT = get_project_root()
-
-
-# ---------------------------------------------------------------------------
-# Runtime path substitution
-# ---------------------------------------------------------------------------
-# These tokens can appear inside mcp_servers.json args/command values and are
-# expanded to their real paths at load time, so the file never needs hardcoded
-# user-specific paths.
-#
-# Supported tokens:
-#   ${PROJECT_ROOT}   → resolved project root (dev: repo dir; prod: sys._MEIPASS)
-#   ${MCP_DYNAMIC}    → ~/Library/Application Support/MacAgentOS/mcp_dynamic
-#   ${VENV_PYTHON}    → current Python if >=3.10, else a local compatible venv,
-#                       else shutil.which("python3")
-#   ${HOME}           → current user home directory
-
-def _python_version(path: Path) -> Optional[tuple[int, int]]:
-    version_info = path.parent.parent / "pyvenv.cfg"
-    if not version_info.exists():
-        return None
-    try:
-        for line in version_info.read_text(encoding="utf-8").splitlines():
-            if line.lower().startswith("version"):
-                raw = line.split("=", 1)[1].strip()
-                parts = raw.split(".")
-                return (int(parts[0]), int(parts[1]))
-    except Exception:
-        return None
-    return None
+logger = logging.getLogger("MacAgent-MCP")
+_VARIABLE = re.compile(r"\$\{([A-Za-z_][A-Za-z_0-9]*)(?::-([^}]*))?\}")
+# Only these bundled tools are callable from the legacy autonomous core.
+# Imported servers and other tools are accessible through explicit user requests.
+_SYSTEM_READS = {"get_system_info", "get_battery_status", "get_running_apps"}
 
 
 def _is_compatible_python(path: Path) -> bool:
-    version = _python_version(path)
-    return version is None or version >= (3, 10)
+    if path == Path(sys.executable):
+        return sys.version_info >= (3, 10)
+    return path.is_file() and os.access(path, os.X_OK)
 
 
 def _resolve_mcp_python() -> str:
-    current = Path(sys.executable)
-    if _is_compatible_python(current):
-        return str(current)
-
-    for relative in ((".venv312", "bin", "python"), (".venv", "bin", "python")):
-        candidate = PROJECT_ROOT.joinpath(*relative)
-        if candidate.exists() and _is_compatible_python(candidate):
-            return str(candidate)
-
+    if _is_compatible_python(Path(sys.executable)):
+        return sys.executable
     return shutil.which("python3") or "python3"
 
 
@@ -75,286 +50,317 @@ def _make_token_map() -> dict:
         "${HOME}": str(Path.home()),
     }
 
-def _expand_tokens(value: str, token_map: dict) -> str:
-    for token, replacement in token_map.items():
-        value = value.replace(token, replacement)
-    return value
 
-def _resolve_arg(value: str, token_map: dict) -> str:
-    """Expand tokens AND rewrite legacy absolute paths to token equivalents."""
-    expanded = _expand_tokens(value, token_map)
-    return expanded
+def _expand_tokens(value: str, token_map: dict, remote=False) -> str:
+    if not isinstance(value, str):
+        raise ValueError("Valeur de configuration textuelle attendue.")
 
-def _resolve_server_config(name: str, cfg: dict, token_map: dict) -> Optional[StdioServerParameters]:
-    """
-    Parse one server config entry, expanding tokens and rewriting absolute paths.
-    Returns None if the resulting command is not executable (safety check).
-    """
-    command = _resolve_arg(cfg.get("command", ""), token_map)
-    args = [_resolve_arg(str(a), token_map) for a in cfg.get("args", [])]
-    env = cfg.get("env") or None
+    def replace(match):
+        key, default = match.groups()
+        if remote and key in {"MACAGENT_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+                              "ANTHROPIC_AUTH_TOKEN", "AWS_SECRET_ACCESS_KEY",
+                              "AWS_SESSION_TOKEN", "AWS_BEARER_TOKEN_BEDROCK", "NPM_TOKEN",
+                              "HTTPS_PROXY", "HTTP_PROXY"}:
+            raise ValueError("Utilisez une variable dédiée à ce connecteur.")
+        if match.group(0) in token_map:
+            return token_map[match.group(0)]
+        if key in os.environ:
+            return os.environ[key]
+        if default is not None:
+            return default
+        raise ValueError(f"Variable d’environnement manquante ({key}).")
 
-    # Safety: if command is missing, skip it before stdio_client tries to spawn it.
-    # This keeps optional MCP dependencies (npx/uvx/etc.) from looking like backend
-    # startup failures.
-    if "/" not in command and shutil.which(command) is None:
-        logger.warning(
-            "MCP server '%s': command '%s' not found on PATH — skipped",
-            name, command,
-        )
+    return _VARIABLE.sub(replace, value)
+
+
+@dataclass(frozen=True)
+class RemoteServer:
+    transport: str
+    url: str
+    headers: dict[str, str]
+
+
+def _resolve_server_config(name: str, cfg: dict, token_map: dict):
+    if not isinstance(cfg, dict):
+        raise ValueError("Configuration de serveur invalide.")
+    if cfg.get("disabled"):
         return None
-
-    # If an absolute command no longer exists (e.g. old hardcoded venv path on
-    # another machine), try the current compatible Python as a last resort.
-    if command.startswith("/") and not Path(command).exists():
-        fallback = _resolve_mcp_python()
-        if fallback:
-            logger.warning(
-                "MCP server '%s': command '%s' not found, falling back to %s",
-                name, command, fallback,
-            )
-            command = fallback
-        else:
-            logger.warning(
-                "MCP server '%s': command '%s' not found and python3 not on PATH — skipped",
-                name, command,
-            )
-            return None
-
-    # Safety: if first arg is a Python script path, check it exists.
-    if args and args[0].endswith(".py") and not Path(args[0]).exists():
-        logger.warning(
-            "MCP server '%s': script '%s' not found — skipped",
-            name, args[0],
-        )
+    transport = cfg.get("type", "stdio")
+    if transport in ("http", "streamable-http", "sse"):
+        if cfg.get("headersHelper") or cfg.get("oauth"):
+            raise ValueError("Ce connecteur nécessite une authentification non prise en charge.")
+        url = _expand_tokens(cfg.get("url", ""), token_map, remote=True)
+        parsed = urlsplit(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError("URL HTTP(S) requise. Utilisez headers pour les identifiants.")
+        headers = cfg.get("headers", {})
+        if not isinstance(headers, dict):
+            raise ValueError("Objet headers attendu.")
+        headers = {k: _expand_tokens(v, token_map, remote=True) for k, v in headers.items()}
+        return RemoteServer(transport, url, headers)
+    if transport != "stdio":
+        raise ValueError("Transport non pris en charge. Utilisez stdio, http ou sse.")
+    if "command" not in cfg or "url" in cfg:
+        raise ValueError("Commande stdio ou type de transport distant requis.")
+    command = _expand_tokens(cfg["command"], token_map)
+    env = cfg.get("env", {})
+    args = cfg.get("args", [])
+    if not isinstance(env, dict) or not isinstance(args, list):
+        raise ValueError("Les champs args et env doivent être un tableau et un objet.")
+    env = {k: _expand_tokens(v, token_map) for k, v in env.items()}
+    args = [_expand_tokens(v, token_map) for v in args]
+    cwd = Path(_expand_tokens(cfg["cwd"], token_map)).expanduser() if cfg.get("cwd") else None
+    if cwd is not None and not cwd.is_dir():
+        raise ValueError("Répertoire de travail introuvable.")
+    if "/" in command:
+        path = Path(command).expanduser()
+        command = str(path if path.is_absolute() else (cwd or Path.cwd()) / path)
+    if sys.platform == "darwin" and "PATH" not in env:
+        # Finder-launched GUI apps typically lack the package manager paths.
+        paths = [*os.get_exec_path(), "/opt/homebrew/bin", "/usr/local/bin", str(Path.home() / ".local/bin")]
+        env["PATH"] = os.pathsep.join(dict.fromkeys(paths))
+    executable = shutil.which(command, path=env.get("PATH"))
+    if not executable:
         return None
-
-    return StdioServerParameters(command=command, args=args, env=env)
+    return StdioServerParameters(command=executable, args=args, env=env, cwd=cwd)
 
 
 class MCPHub:
-    """
-    Le Hub central qui se connecte à tous les serveurs MCP configurés
-    et agrège leurs outils.
-    """
-    def __init__(self, config_path: str = "mcp_servers.json"):
-        self.config_path = (
-            str(PROJECT_ROOT / config_path)
-            if config_path == "mcp_servers.json"
-            else config_path
-        )
-        self.servers: Dict[str, StdioServerParameters] = {}
-        self.sessions: Dict[str, ClientSession] = {}
-        self.available_tools: Dict[str, dict] = {} # { "tool_name": {"server": "server_name", "info": tool_info} }
-        self.skipped_servers: List[dict] = []
-        self._exit_stack = None
-
-    def _mark_skipped(self, server_name: str, reason: str):
-        if any(item.get("name") == server_name for item in self.skipped_servers):
-            return
-        self.skipped_servers.append({"name": server_name, "reason": reason})
-
-    def load_config(self):
-        """Charge la configuration des serveurs MCP depuis le fichier JSON.
-
-        Paths in the JSON can use tokens like ${PROJECT_ROOT}, ${VENV_PYTHON},
-        ${MCP_DYNAMIC}, and ${HOME} — they are expanded at load time so the file
-        never needs hardcoded user-specific absolute paths.
-
-        Legacy absolute paths from older configs are accepted as-is; if the
-        command/script no longer exists on this machine the server is silently
-        skipped instead of crashing.
-        """
-        try:
-            with open(self.config_path, 'r') as f:
-                config = json.load(f)
-
-            token_map = _make_token_map()
-            # Support both key names used historically
-            servers_raw = config.get("mcpServers") or config.get("mcp_servers") or {}
-            loaded = 0
-            skipped = 0
-            for server_name, server_config in servers_raw.items():
-                params = _resolve_server_config(server_name, server_config, token_map)
-                if params is not None:
-                    self.servers[server_name] = params
-                    loaded += 1
-                else:
-                    self._mark_skipped(
-                        server_name,
-                        "Dépendance ou script optionnel absent; serveur MCP ignoré.",
-                    )
-                    skipped += 1
-            logger.info(
-                "MCP config loaded: %d servers active, %d skipped (missing files/commands).",
-                loaded, skipped,
-            )
-        except FileNotFoundError:
-            logger.warning(
-                "MCP config '%s' not found — creating default config.", self.config_path
-            )
-            self._create_default_config()
-        except Exception as e:
-            logger.error("Failed to load MCP config '%s': %s — MCP disabled.", self.config_path, e)
-
-    def _create_default_config(self):
-        """Crée un fichier de configuration par défaut avec quelques serveurs utiles."""
-        default_config = {
-            "mcpServers": {
-                "filesystem": {
-                    "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-filesystem", str(PROJECT_ROOT)]
-                },
-                "fetch": {
-                    "command": "uvx",
-                    "args": ["mcp-server-fetch"]
-                }
-            }
-        }
-        with open(self.config_path, 'w') as f:
-            json.dump(default_config, f, indent=4)
-        self.load_config()
-
-    # Per-server connection timeout (seconds). Prevents one slow/absent server
-    # from blocking the others during startup.
     _CONNECT_TIMEOUT = 18.0 if getattr(sys, "frozen", False) else 6.0
 
-    async def _connect_one(self, server_name: str, server_params: StdioServerParameters):
-        """Connect to a single MCP server, with its own exit stack and timeout."""
-        from contextlib import AsyncExitStack
-        stack = AsyncExitStack()
+    def __init__(self, config_path=None):
+        self.config_path = Path(config_path) if config_path else PROJECT_ROOT / "mcp_servers.json"
+        self.user_config = None if config_path else get_app_support_dir() / "mcp.json"
+        self.servers = {}
+        self.sessions = {}
+        self.tools = {}
+        self.capabilities = {}
+        self.skipped_servers = []
+        self._workers = []
+        self._stop = None
+        self._trusted_system = False
+
+    def _mark_skipped(self, name, reason):
+        if not any(row["name"] == name for row in self.skipped_servers):
+            self.skipped_servers.append({"name": name, "reason": reason})
+
+    def load_config(self):
+        """Read the packaged defaults and a user-selected configuration snapshot."""
+        self.servers.clear()
+        self.skipped_servers.clear()
+        self._trusted_system = False
+        for path in [self.config_path, self.user_config]:
+            if path is None or not path.exists():
+                continue
+            try:
+                config = json.loads(path.read_text(encoding="utf-8"))
+                entries = config.get("mcpServers", config.get("mcp_servers", {}))
+                if not isinstance(entries, dict):
+                    raise ValueError
+            except (AttributeError, OSError, ValueError):
+                self._mark_skipped(path.name, "Fichier de configuration MCP illisible.")
+                continue
+            tokens = _make_token_map()
+            for name, cfg in entries.items():
+                if name in self.servers:
+                    self._mark_skipped(name, "Ce nom est déjà utilisé. Renommez le serveur importé.")
+                    continue
+                if not name or any(c.isspace() for c in name):
+                    self._mark_skipped(name or "?", "Le nom du serveur doit être un seul mot.")
+                    continue
+                if isinstance(cfg, dict) and cfg.get("disabled"):
+                    continue
+                try:
+                    params = _resolve_server_config(name, cfg, tokens)
+                except (ValueError, TypeError, OSError) as exc:
+                    # Only display our configuration validation messages. Never log credentials.
+                    reason = str(exc) if type(exc) is ValueError else "Configuration invalide."
+                    self._mark_skipped(name, reason)
+                    continue
+                if params is None:
+                    self._mark_skipped(name, "Commande introuvable. Vérifiez son chemin absolu.")
+                    continue
+                self.servers[name] = params
+                if path == PROJECT_ROOT / "mcp_servers.json" and name == "mac-control":
+                    self._trusted_system = True
+
+    async def _run_server(self, name, params, ready):
+        # The SDK's AnyIO task groups must be entered and exited by the same task.
         try:
-            read, write = await asyncio.wait_for(
-                stack.enter_async_context(stdio_client(server_params)),
-                timeout=self._CONNECT_TIMEOUT,
-            )
-            session = await asyncio.wait_for(
-                stack.enter_async_context(ClientSession(read, write)),
-                timeout=self._CONNECT_TIMEOUT,
-            )
-            await asyncio.wait_for(session.initialize(), timeout=self._CONNECT_TIMEOUT)
-            self.sessions[server_name] = session
-            self._server_stacks[server_name] = stack
-            logger.info(f"✅ Connecté à {server_name}")
-            await self._discover_tools(server_name, session)
+            async with AsyncExitStack() as stack:
+                if isinstance(params, StdioServerParameters):
+                    transport = stdio_client(params)
+                elif params.transport == "sse":
+                    transport = sse_client(params.url, headers=params.headers)
+                else:
+                    client = await stack.enter_async_context(httpx.AsyncClient(
+                        headers=params.headers, timeout=httpx.Timeout(30.0, read=300.0)
+                    ))
+                    transport = streamable_http_client(params.url, http_client=client)
+                streams = await stack.enter_async_context(transport)
+                session = await stack.enter_async_context(ClientSession(*streams[:2]))
+                init = await session.initialize()
+                discovered = {}
+                if init.capabilities.tools is not None:
+                    discovered = {tool.name: tool for tool in await self._list_pages(session.list_tools, "tools")}
+                self.capabilities[name] = init.capabilities
+                self.sessions[name] = session
+                self.tools[name] = discovered
+                ready.set()
+                await self._stop.wait()
+        except Exception as exc:
+            logger.warning("MCP %s: %s", name, type(exc).__name__)
+            self._mark_skipped(name, "Connexion interrompue. Vérifiez la commande, l’URL et l’authentification.")
+        finally:
+            self.capabilities.pop(name, None)
+            self.tools.pop(name, None)
+            self.sessions.pop(name, None)
+            ready.set()
+
+    async def _start_one(self, name, params):
+        ready = asyncio.Event()
+        worker = asyncio.create_task(self._run_server(name, params, ready))
+        self._workers.append(worker)
+        try:
+            await asyncio.wait_for(ready.wait(), self._CONNECT_TIMEOUT)
         except asyncio.TimeoutError:
-            logger.warning(f"⏱ Timeout connexion à {server_name} (>{self._CONNECT_TIMEOUT}s) — ignoré")
-            self._mark_skipped(server_name, "Connexion trop lente; serveur MCP ignoré.")
-            await stack.aclose()
-        except Exception as e:
-            logger.error(f"❌ Échec de la connexion à {server_name} : {e}")
-            self._mark_skipped(server_name, "Connexion impossible; serveur MCP ignoré.")
-            await stack.aclose()
+            self._mark_skipped(name, "Délai de connexion MCP dépassé.")
+            worker.cancel()
+        except asyncio.CancelledError:
+            worker.cancel()
+            raise
 
     async def connect_all(self):
-        """Se connecte à tous les serveurs MCP configurés en parallèle."""
-        self._server_stacks: Dict[str, Any] = {}
-        tasks = [
-            self._connect_one(name, params)
-            for name, params in self.servers.items()
-        ]
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-    async def _discover_tools(self, server_name: str, session: ClientSession):
-        """Demande la liste des outils au serveur et les stocke."""
-        try:
-            response = await session.list_tools()
-            tools = response.tools
-            
-            for tool in tools:
-                # On stocke l'outil avec une référence au serveur qui le possède
-                self.available_tools[tool.name] = {
-                    "server": server_name,
-                    "info": tool
-                }
-            logger.info(f"  -> {len(tools)} outils découverts sur {server_name}")
-        except Exception as e:
-            logger.error(f"Erreur lors de la découverte des outils sur {server_name} : {e}")
-
-    def get_all_tools_for_llm(self) -> List[dict]:
-        """Formate tous les outils découverts pour les envoyer au LLM."""
-        formatted_tools = []
-        for tool_name, data in self.available_tools.items():
-            tool = data["info"]
-            formatted_tools.append({
-                "name": tool.name,
-                "description": tool.description or "",
-                "inputSchema": tool.inputSchema
-            })
-        return formatted_tools
-
-    async def call_tool(self, tool_name: str, arguments: dict) -> Any:
-        """
-        Route l'appel d'outil vers le bon serveur MCP.
-        Le garde-fou (HITL) a été désactivé à la demande de l'utilisateur.
-        """
-        if tool_name not in self.available_tools:
-            return f"Erreur : L'outil '{tool_name}' n'existe pas."
-            
-        server_name = self.available_tools[tool_name]["server"]
-        session = self.sessions.get(server_name)
-        
-        if not session:
-            return f"Erreur : La session avec le serveur {server_name} est inactive."
-            
-        # --- GARDE-FOU DÉSACTIVÉ ---
-        logger.warning(f"⚠️ EXÉCUTION AUTOMATIQUE (SANS GARDE-FOU) : {tool_name} sur {server_name}")
-        logger.info(f"Arguments : {json.dumps(arguments)}")
-        # ------------------------------------
-            
-        try:
-            result = await session.call_tool(tool_name, arguments)
-            
-            # Formater le résultat (MCP renvoie une liste de contenus)
-            if result.content:
-                # On prend le premier contenu texte pour simplifier
-                for content in result.content:
-                    if content.type == "text":
-                        return content.text
-            return "Outil exécuté avec succès (pas de retour texte)."
-            
-        except Exception as e:
-            logger.error(f"Erreur lors de l'exécution de {tool_name} : {e}")
-            return f"Erreur d'exécution : {str(e)}"
+        if self._workers:
+            await self.cleanup()
+        self._stop = asyncio.Event()
+        await asyncio.gather(*(self._start_one(name, p) for name, p in self.servers.items()))
 
     async def cleanup(self):
-        """Ferme proprement toutes les connexions."""
-        stacks = getattr(self, "_server_stacks", {})
-        if stacks:
-            await asyncio.gather(
-                *(stack.aclose() for stack in stacks.values()),
-                return_exceptions=True,
+        if self._stop:
+            self._stop.set()
+        if self._workers:
+            await asyncio.gather(*self._workers, return_exceptions=True)
+            self._workers.clear()
+
+    def get_all_tools_for_llm(self):
+        if not self._trusted_system:
+            return []
+        return [
+            {"name": name, "description": tool.description or "", "inputSchema": tool.inputSchema}
+            for name, tool in self.tools.get("mac-control", {}).items() if name in _SYSTEM_READS
+        ]
+
+    async def call_tool(self, tool_name: str, arguments: dict):
+        if not self._trusted_system or tool_name not in _SYSTEM_READS:
+            return "Cet outil nécessite une commande /mcp explicite dans le chat."
+        return await self._invoke("mac-control", tool_name, arguments)
+
+    async def _invoke(self, server_name, tool_name, arguments):
+        if tool_name not in self.tools.get(server_name, {}):
+            return "Outil introuvable. Envoyez /mcp pour afficher les outils connectés."
+        try:
+            result = await self.sessions[server_name].call_tool(
+                tool_name, arguments, read_timeout_seconds=timedelta(seconds=45)
             )
-            logger.info("Toutes les connexions MCP ont été fermées.")
-        elif self._exit_stack:
-            await self._exit_stack.aclose()
-            logger.info("Toutes les connexions MCP ont été fermées.")
+        except Exception as exc:
+            logger.warning("MCP call %s/%s: %s", server_name, tool_name, type(exc).__name__)
+            return "Échec de l’appel MCP. Vérifiez le connecteur dans Diagnostics."
+        parts = []
+        for item in result.content:
+            if item.type == "text":
+                parts.append(item.text)
+            elif item.type in ("image", "audio"):
+                parts.append(f"[{item.type} · {item.mimeType}]")
+            else:
+                # Resource links and embedded text resources retain their usable metadata.
+                resource = item.model_dump(mode="json", by_alias=True, exclude_none=True)
+                if isinstance(resource.get("resource"), dict):
+                    resource["resource"].pop("blob", None)
+                parts.append(json.dumps(resource, ensure_ascii=False))
+        if result.structuredContent is not None and not parts:
+            parts.append(json.dumps(result.structuredContent, ensure_ascii=False))
+        reply = "\n".join(parts) or "Outil exécuté (résultat vide)."
+        return ("Erreur MCP : " if result.isError else "") + reply
 
-# --- TEST DU HUB MCP ---
-async def main():
-    print("🚀 Démarrage du Hub MCP MacAgent...")
-    hub = MCPHub()
-    
-    # 1. Charger la config
-    hub.load_config()
-    
-    # 2. Se connecter aux serveurs
-    await hub.connect_all()
-    
-    # 3. Afficher les outils disponibles
-    print("\n🛠️ Outils disponibles pour le LLM :")
-    tools = hub.get_all_tools_for_llm()
-    for t in tools:
-        print(f" - {t['name']} : {t['description'][:50]}...")
-        
-    # 4. Test d'appel d'outil (si le serveur filesystem est connecté)
-    if "list_allowed_directories" in hub.available_tools:
-        print("\n🧪 Test d'exécution d'un outil MCP...")
-        result = await hub.call_tool("list_allowed_directories", {})
-        print(f"Résultat : {result}")
-        
-    await hub.cleanup()
+    @staticmethod
+    async def _list_pages(method, field):
+        rows, seen = [], set()
+        cursor = None
+        while True:
+            page = await method(cursor=cursor)
+            rows.extend(getattr(page, field))
+            cursor = page.nextCursor
+            if not cursor:
+                return rows
+            if cursor in seen:
+                raise ValueError("Repeated MCP pagination cursor")
+            seen.add(cursor)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+    async def _catalog_lookup(self, server_name, kind, value):
+        session = self.sessions.get(server_name)
+        capabilities = self.capabilities.get(server_name)
+        if session is None:
+            return "Serveur MCP déconnecté."
+        if kind in ("@resources", "@templates") and capabilities.resources is None:
+            return "Ce serveur ne publie aucune ressource MCP."
+        if kind == "@prompts" and capabilities.prompts is None:
+            return "Ce serveur ne publie aucun prompt MCP."
+        if kind == "@templates":
+            entries = await self._list_pages(session.list_resource_templates, "resourceTemplates")
+            return "\n".join(str(item.uriTemplate) for item in entries) or "Aucun modèle de ressource."
+        if kind == "@resources":
+            if not value:
+                entries = await self._list_pages(session.list_resources, "resources")
+                return "\n".join(str(item.uri) for item in entries) or "Aucune ressource."
+            reply = await session.read_resource(AnyUrl(value))
+            return "\n".join(getattr(item, "text", None) or f"[{item.uri} · {item.mimeType}]"
+                             for item in reply.contents) or "Ressource vide."
+        if not value:
+            entries = await self._list_pages(session.list_prompts, "prompts")
+            return "\n".join(f"{item.name} ({', '.join(a.name for a in item.arguments or [])})"
+                             for item in entries) or "Aucun prompt."
+        fields = value.split(None, 1)
+        arguments = json.loads(fields[1]) if len(fields) > 1 else {}
+        if not isinstance(arguments, dict) or not all(isinstance(v, str) for v in arguments.values()):
+            return "Un prompt attend un objet JSON à valeurs textuelles."
+        prompt = await session.get_prompt(fields[0], arguments)
+        return "\n".join(f"{m.role} — {getattr(m.content, 'text', None) or '[' + m.content.type + ']'}"
+                         for m in prompt.messages) or "Prompt vide."
+
+    async def chat_command(self, message: str) -> Optional[str]:
+        """Dispatch only a slash command from the current user's message."""
+        parts = message.strip().split(None, 3)
+        if not parts or parts[0] != "/mcp":
+            return None
+        if len(parts) <= 2:
+            names = sorted(self.sessions) if len(parts) == 1 else [parts[1]]
+            entries = [f"{name} — {', '.join(sorted(self.tools[name])) or 'aucun outil'}"
+                       for name in names if name in self.tools]
+            return "\n".join(entries or ["Aucun serveur correspondant connecté. Consultez Diagnostics → MCP."]) + (
+                "\n\nSchéma : /mcp SERVEUR OUTIL\nExécuter : /mcp SERVEUR OUTIL {…}"
+                "\nCatalogues : /mcp SERVEUR @resources, @templates ou @prompts"
+            )
+        _, server_name, tool_name, *raw_args = parts
+        if tool_name in {"@resources", "@templates", "@prompts"}:
+            try:
+                return await asyncio.wait_for(
+                    self._catalog_lookup(server_name, tool_name, raw_args[0] if raw_args else ""), 45
+                )
+            except (ValueError, TypeError):
+                return "Paramètres invalides. Vérifiez l’URI ou les arguments JSON."
+            except Exception as exc:
+                logger.warning("MCP catalog %s: %s", server_name, type(exc).__name__)
+                return "Le serveur MCP n’a pas pu fournir ce résultat."
+        tool = self.tools.get(server_name, {}).get(tool_name)
+        if tool is None:
+            return "Outil introuvable. Envoyez /mcp pour afficher les outils connectés."
+        if not raw_args:
+            return f"{tool.description or tool.name}\n{json.dumps(tool.inputSchema, ensure_ascii=False, indent=2)}"
+        try:
+            arguments = json.loads(raw_args[0])
+        except ValueError:
+            arguments = None
+        if not isinstance(arguments, dict):
+            return "Arguments invalides. Fournissez un objet JSON, ou {} pour un appel sans argument."
+        return await self._invoke(server_name, tool_name, arguments)

@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from paths import get_data_dir
+from claude_skills import MarkdownSkill, discover
+from paths import get_data_dir, write_private_json
 
 
 VALID_RISKS = {"low", "medium", "high"}
@@ -30,6 +31,8 @@ class SkillDefinition:
     enabled_by_default: bool = False
     risk: str = "low"
     examples: List[str] = field(default_factory=list)
+
+    markdown: Optional[MarkdownSkill] = None
 
     def __post_init__(self):
         if self.risk not in VALID_RISKS:
@@ -144,11 +147,38 @@ class SkillsManager:
         self,
         settings_path: Optional[Path] = None,
         definitions: Optional[Iterable[SkillDefinition]] = None,
+        personal_root: Optional[Path] = None,
     ):
         self.settings_path = Path(settings_path) if settings_path else get_data_dir() / "settings.json"
+        self.personal_root = personal_root or Path.home()
         self.definitions: Dict[str, SkillDefinition] = {
             skill.id: skill for skill in (definitions or DEFAULT_SKILLS)
         }
+
+    def including_markdown(self, project_path: str = "") -> SkillsManager:
+        """Return a request-scoped catalog so two open projects cannot mix skills."""
+        definitions = list(self.definitions.values())
+        for name, skill in discover(self.personal_root, project_path).items():
+            definitions.append(SkillDefinition(
+                id=f"claude:{name}", name=f"/{skill.command}", description=skill.description,
+                category="Claude Skills", system_instructions="", allowed_tools=[],
+                enabled_by_default=True, examples=[f"/{name}"], markdown=skill,
+            ))
+        return SkillsManager(self.settings_path, definitions, self.personal_root)
+
+    def invoke_markdown(self, command: str, arguments: str) -> str:
+        skill = self.get(f"claude:{command}") or next(
+            (s for s in self.definitions.values() if s.markdown and s.markdown.command == command), None
+        )
+        if not skill or not skill.markdown:
+            raise ValueError(f"Skill /{command} introuvable dans le projet ou les skills personnels.")
+        if not self._state_for(skill.id)["enabled"]:
+            raise ValueError(f"Le skill /{command} est désactivé.")
+        return skill.markdown.render(arguments)
+
+    def _state_key(self, skill_id: str) -> str:
+        markdown = self.definitions[skill_id].markdown
+        return str(markdown.path) if markdown else skill_id
 
     def _load_settings(self) -> Dict[str, Any]:
         try:
@@ -162,10 +192,7 @@ class SkillsManager:
 
     def _write_settings(self, settings: Dict[str, Any]) -> None:
         self.settings_path.parent.mkdir(parents=True, exist_ok=True)
-        self.settings_path.write_text(
-            json.dumps(settings, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        write_private_json(self.settings_path, settings)
 
     def _states(self) -> Dict[str, Dict[str, Any]]:
         raw = self._load_settings().get("skill_states", {})
@@ -173,7 +200,7 @@ class SkillsManager:
 
     def _state_for(self, skill_id: str) -> Dict[str, Any]:
         skill = self.definitions[skill_id]
-        state = self._states().get(skill_id, {})
+        state = self._states().get(self._state_key(skill_id), {})
         if not isinstance(state, dict):
             state = {}
         return {
@@ -188,12 +215,13 @@ class SkillsManager:
         states = settings.get("skill_states", {})
         if not isinstance(states, dict):
             states = {}
-        current = states.get(skill_id, {})
+        state_key = self._state_key(skill_id)
+        current = states.get(state_key, {})
         if not isinstance(current, dict):
             current = {}
         current["enabled"] = bool(enabled)
         current.setdefault("parameters", self.definitions[skill_id].parameters)
-        states[skill_id] = current
+        states[state_key] = current
         settings["skill_states"] = states
         self._write_settings(settings)
         return self.to_dict(skill_id, {})
@@ -205,6 +233,10 @@ class SkillsManager:
         return self.definitions.get(skill_id)
 
     def _availability(self, skill: SkillDefinition, context: Dict[str, Any]) -> tuple[bool, str]:
+        if skill.markdown:
+            if skill.markdown.blocked:
+                return False, skill.markdown.blocked
+            return True, "Utilisable dans le chat en mode texte. Les scripts et outils externes ne sont pas exécutés."
         active_tools = set(context.get("active_tools", []))
         skipped_tools = set(context.get("skipped_tools", []))
         missing = [tool for tool in skill.allowed_tools if tool not in active_tools]
@@ -276,6 +308,13 @@ class SkillsManager:
                 "message": payload["availability_message"],
                 "details": {"allowed_tools": payload["allowed_tools"]},
             }
+        markdown = self.definitions[skill_id].markdown
+        if markdown:
+            try:
+                markdown.render("")
+            except (ValueError, OSError, RuntimeError) as exc:
+                return {"id": skill_id, "status": "unavailable", "message": str(exc), "details": {}}
+            return {"id": skill_id, "status": "ok", "message": "Le texte du skill et ses références sont lisibles.", "details": {}}
         if skill_id == "local_models":
             models = context.get("ollama_models", [])
             return {

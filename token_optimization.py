@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 from hashlib import sha1
 from pathlib import Path
+from paths import write_private_json
 from typing import Any, Dict, List, Optional
 
 
@@ -66,7 +67,7 @@ class JsonStore:
             return {}
 
     def save(self, payload: Dict[str, Any]) -> None:
-        self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_private_json(self.path, payload)
 
 
 class ProjectMemory:
@@ -160,8 +161,7 @@ class ContextBuilder:
 
         messages = [{"role": "system", "content": "\n\n".join(part for part in system_parts if part)}]
         messages.extend(trimmed_history)
-        final_user_message = user_message if turbo else _shorten(user_message, 2400)
-        messages.append({"role": "user", "content": final_user_message})
+        messages.append({"role": "user", "content": user_message})
 
         return {
             "messages": messages,
@@ -300,17 +300,19 @@ class TokenOptimizer:
         turbo: bool = False,
     ) -> Dict[str, Any]:
         project_key = self.project_key(project_path)
+        summary = self.project_memory.get_summary(project_key) if project_path else ""
+        task = self.task_state.get_state(project_key) if project_path else ""
         return {
             "project_key": project_key,
             "project_label": self.project_label(project_path),
-            "project_summary": self.project_memory.get_summary(project_key),
-            "task_state": self.task_state.get_state(project_key),
+            "project_summary": summary,
+            "task_state": task,
             **self.context_builder.build(
                 base_system_prompt=base_system_prompt,
                 user_message=user_message,
                 history=history,
-                project_summary=self.project_memory.get_summary(project_key),
-                task_state=self.task_state.get_state(project_key),
+                project_summary=summary,
+                task_state=task,
                 turbo=turbo,
             ),
         }

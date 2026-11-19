@@ -146,7 +146,7 @@ exe = EXE(
     console=True,     # Keep console=True; the Swift app redirects stdout/stderr
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch='arm64',    # Change to 'x86_64' or None (universal) as needed
+    target_arch=None,       # Match the architecture of the build Python
     codesign_identity=None,
     entitlements_file=None,
 )

@@ -18,6 +18,7 @@ from llm_connector import LLMConnector
 from llm_universal import get_provider
 from mcp_hub import MCPHub
 from token_optimization import TokenOptimizer
+from paths import write_private_json
 
 logger = logging.getLogger("MacAgent-Core")
 
@@ -146,7 +147,7 @@ class MacAgentCore:
         })
 
         try:
-            self.settings_path.write_text(json.dumps(existing, indent=2))
+            write_private_json(self.settings_path, existing)
         except Exception as exc:
             logger.warning(f"Could not persist settings to {self.settings_path}: {exc}")
     
@@ -453,8 +454,9 @@ Tu peux aussi utiliser les SKILLS dans .opencode/skills/ pour des workflows réu
         """Update LLM settings"""
         resolved_provider = provider or self.llm.provider
         resolved_model = _normalize_provider_model(resolved_provider, model or self.llm.model)
-        resolved_api_key = self.llm.api_key if api_key is None else api_key.strip()
-        resolved_base_url = self.llm.base_url if base_url is None else (base_url.strip() or None)
+        same_provider = resolved_provider == self.llm.provider
+        resolved_api_key = self.llm.api_key if same_provider and api_key is None else (api_key or "").strip()
+        resolved_base_url = self.llm.base_url if same_provider and base_url is None else ((base_url or "").strip() or None)
 
         self.llm = LLMConnector(
             provider=resolved_provider,
@@ -492,7 +494,7 @@ Tu peux aussi utiliser les SKILLS dans .opencode/skills/ pour des workflows réu
             "ready": self.hub is not None,
             "workspaces": [w.to_dict() for w in self.workspaces.values()],
             "current_workspace": self.current_workspace_id,
-            "settings": self.get_settings()
+            "settings": {k: v for k, v in self.get_settings().items() if k != "api_key"}
         }
 
 

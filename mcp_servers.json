@@ -299,7 +299,8 @@
         "-y",
         "@modelcontextprotocol/server-filesystem",
         "${PROJECT_ROOT}"
-      ]
+      ],
+      "disabled": true
     },
     "mac-control": {
       "command": "${VENV_PYTHON}",
@@ -317,25 +318,29 @@
       "command": "${VENV_PYTHON}",
       "args": [
         "${MCP_DYNAMIC}/mcp_ChatGPT.py"
-      ]
+      ],
+      "disabled": true
     },
     "google_chrome": {
       "command": "${VENV_PYTHON}",
       "args": [
         "${MCP_DYNAMIC}/mcp_Google_Chrome.py"
-      ]
+      ],
+      "disabled": true
     },
     "vlc": {
       "command": "${VENV_PYTHON}",
       "args": [
         "${MCP_DYNAMIC}/mcp_VLC.py"
-      ]
+      ],
+      "disabled": true
     },
     "claude": {
       "command": "${VENV_PYTHON}",
       "args": [
         "${MCP_DYNAMIC}/mcp_Claude.py"
-      ]
+      ],
+      "disabled": true
     }
   },
   "available_servers": [

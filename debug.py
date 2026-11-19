@@ -5,6 +5,7 @@ Export runtime state for troubleshooting
 import json
 import logging
 from pathlib import Path
+from paths import storage_dir as default_storage_dir
 from datetime import datetime
 from typing import Dict, Any
 
@@ -16,7 +17,7 @@ class DebugExporter:
     
     def __init__(self, storage_dir: str = None):
         if storage_dir is None:
-            storage_dir = Path(__file__).parent / "data" / "debug"
+            storage_dir = default_storage_dir("debug")
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
     
